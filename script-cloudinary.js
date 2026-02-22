@@ -176,53 +176,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ✅ Veri çekme ve önbellekleme fonksiyonu
     async function fetchAndCacheData(onlyStores = false) {
         try {
-            // ✅ YENİ: Cloudflare Worker API üzerinden veri çek
-            const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-            console.log('🔄 Worker API üzerinden veriler yükleniyor:');
+            console.log('🔄 Firebase üzerinden temel veriler yükleniyor...');
+            const [storesSnap, parentCatsSnap, subCatsSnap, catsSnap] = await Promise.all([
+                window.db.collection('stores').get(),
+                window.db.collection('parentCategories').get(),
+                window.db.collection('subcategories').get(),
+                window.db.collection('categories').get()
+            ]);
 
-            const response = await fetch(WORKER_URL, {
-                method: 'GET',
-                mode: 'cors',
-                cache: 'no-cache',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP Error: ${response.status}`);
-            }
+            allStores = storesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            window.allParentCategories = parentCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            window.allSubcategories = subCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            window.allOldCategories = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-            const data = await response.json();
-
-            console.log('📦 Worker Ham Veri (Raw):', data);
-
-            if (!data || !data.stores) {
-                console.warn('⚠️ Worker geçersiz format döndürdü:', data);
-                throw new Error('Geçersiz veri formatı (Worker)');
-            }
-
-            if (data.stores.length === 0) {
-                console.warn('⚠️ Worker verisi boş geldi (0 mağaza), Firebase yedeğine geçiliyor...');
-                throw new Error('Worker empty data');
-            }
-
-            if (onlyStores) {
-                allStores = data.stores;
-                // Ürünler yüklenene kadar boş bırak ama skeleton gösterebilmek için allStores lazım
-                window.isInitialLoadComplete = false;
-                return true;
-            }
-
-            allStores = data.stores;
-            // Global ürün yüklemesi kaldırıldı - Lazy Loading kullanılacak
             window.isInitialLoadComplete = true; // ✅ Temel yükleme bitti
-            window.allParentCategories = data.parentCategories || [];
-            window.allSubcategories = data.subcategories || [];
-            window.allOldCategories = data.categories || [];
+            console.log(`✅ ${allStores.length} mağaza ve temel veriler yüklendi (Firebase)`);
 
-            console.log(`✅ ${allStores.length} mağaza ve temel veriler yüklendi (Worker)`);
-
-            // Önbelleğe kaydet (Sadece mağaza verileri)
             setCachedData({
                 stores: allStores,
                 parentCategories: window.allParentCategories,
@@ -230,45 +199,39 @@ document.addEventListener('DOMContentLoaded', async () => {
                 categories: window.allOldCategories
             });
 
-            // Eğer sayfa açıksa ama ürünler henüz yüklenmemişse router'ı tetikle
             if (currentStoreId) renderStorePage(currentStoreId);
-
             return true;
+
         } catch (error) {
-            console.warn('⚠️ Worker API hatası, Firebase yedeğine geçiliyor...', error);
+            console.warn('⚠️ Firebase hatası, Worker yedeğine geçiliyor...', error);
 
-            // Firebase fallback
             try {
-                const [storesSnap, parentCatsSnap, subCatsSnap, catsSnap] = await Promise.all([
-                    window.db.collection('stores').get(),
-                    window.db.collection('parentCategories').get(),
-                    window.db.collection('subcategories').get(),
-                    window.db.collection('categories').get()
-                ]);
-
-                allStores = storesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                // Global ürün yüklemesi kaldırıldı - Lazy Loading kullanılacak
-                window.allParentCategories = parentCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                window.allSubcategories = subCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                window.allOldCategories = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-                window.isInitialLoadComplete = true; // ✅ Tam yükleme bitti
-                console.log(`✅ ${allStores.length} mağaza ve temel veriler yüklendi (Firebase)`);
-
-                setCachedData({
-                    stores: allStores,
-                    parentCategories: window.allParentCategories,
-                    subcategories: window.allSubcategories,
-                    categories: window.allOldCategories
+                const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
+                const response = await fetch(WORKER_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
                 });
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
 
+                const data = await response.json();
+                if (!data || !data.stores) throw new Error('Geçersiz Worker verisi');
+
+                allStores = data.stores;
+                window.allParentCategories = data.parentCategories || [];
+                window.allSubcategories = data.subcategories || [];
+                window.allOldCategories = data.categories || [];
+                window.isInitialLoadComplete = true;
+
+                console.log(`✅ Veriler Worker yedeğinden yüklendi.`);
                 return true;
-            } catch (firebaseError) {
-                console.error('❌ KRİTİK HATA: Hem Worker hem Firebase başarısız!', firebaseError);
-                throw firebaseError;
+            } catch (workerError) {
+                console.error('❌ KRİTİK: Hem Firebase hem Worker başarısız!', workerError);
+                return false;
             }
         }
     }
+
 
     // --- YÖNLENDİRME (ROUTING) FONKSİYONU ---
     async function router() {
@@ -734,7 +697,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             products = await showlyIDB.getProductsStore(storeId);
             if (products.length > 0) {
                 console.log(`📦 Ürünler IndexedDB'den yüklendi (${storeId})`);
-                // Hafızayı güncelle (hızlı erişim için)
                 allProducts = [...allProducts, ...products];
                 return products;
             }
@@ -742,10 +704,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.warn('IDB okuma hatası:', e);
         }
 
-        // 3. Worker (Bulut - API) - SADECE bu mağazanın ürünlerini çek
+        // 3. Firebase (SDK - Birincil) - SADECE bu mağazanın ürünlerini çek
+        try {
+            console.log(`☁️ Ürünler Firebase SDK üzerinden çekiliyor (${storeId})...`);
+            const snap = await window.db.collection('products')
+                .where('storeId', '==', storeId)
+                .get();
+
+            products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            if (products.length > 0) {
+                allProducts = [...allProducts, ...products];
+                await showlyIDB.saveProducts(products);
+                console.log(`✅ ${products.length} ürün Firebase'den indirildi.`);
+                return products;
+            }
+        } catch (fbErr) {
+            console.warn('Firebase SDK hatası, Worker yedeğine geçiliyor...', fbErr);
+        }
+
+        // 4. Worker (Yedek) - Firebase çalışmazsa Worker üzerinden dene
         try {
             const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-            console.log(`☁️ Ürünler Worker üzerinden çekiliyor (${storeId})...`);
+            console.log(`🔄 Ürünler Worker yedeğinden çekiliyor (${storeId})...`);
 
             const response = await fetch(`${WORKER_URL}?storeId=${storeId}`, {
                 method: 'GET',
@@ -757,38 +738,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 products = data.products || [];
 
                 if (products.length > 0) {
-                    // Hafızaya ve IndexedDB'ye kaydet
                     allProducts = [...allProducts, ...products];
                     await showlyIDB.saveProducts(products);
-                    console.log(`✅ ${products.length} ürün Worker'dan indirildi ve kaydedildi.`);
+                    console.log(`✅ ${products.length} ürün Worker'dan indirildi.`);
                     return products;
                 }
-            } else {
-                console.warn('Worker on-demand hatası, Firebase yedeğine geçiliyor...');
             }
-        } catch (err) {
-            console.warn('Worker bağlantı hatası, Firebase yedeğine geçiliyor...', err);
+        } catch (workerErr) {
+            console.error('❌ KRİTİK: Mağaza ürünleri çekilemedi!', workerErr);
         }
 
-        // 4. Firebase (Yedek) - Worker çalışmazsa direkt Firebase'den çek
-        try {
-            const snap = await window.db.collection('products')
-                .where('storeId', '==', storeId)
-                .get();
-
-            products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            if (products.length > 0) {
-                // Hafızaya ve IndexedDB'ye kaydet
-                allProducts = [...allProducts, ...products];
-                await showlyIDB.saveProducts(products);
-                console.log(`✅ ${products.length} ürün Firebase'den indirildi ve kaydedildi.`);
-            }
-            return products;
-        } catch (err) {
-            console.error('❌ Ürün çekme hatası:', err);
-            return [];
-        }
+        return [];
     }
 
     const renderStorePage = async (storeId, activeFilter = null) => {

@@ -483,15 +483,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.innerHTML = `
                     <td data-label="Stol No">${table}</td>
                     <td data-label="Status"><span class="status-badge confirmed">Aktiv</span></td>
-                    <td data-label="Sazlamalar">
-                        <button class="btn-icon edit-bron-settings" title="Sazlamalar"><i class="fas fa-cog"></i></button>
-                    </td>
                 `;
                 bronTableBody.appendChild(row);
-
-                row.querySelector('.edit-bron-settings')?.addEventListener('click', () => {
-                    openBronSettingsBtn.click();
-                });
             });
 
         } catch (error) {
