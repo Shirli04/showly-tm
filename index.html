@@ -227,6 +227,10 @@
                         style="display: none; margin-bottom: 0; background-color: var(--primary-color); color: white; border: none;">
                         <i class="fas fa-calendar-check"></i> <span data-i18n="banquet_btn">Banket</span>
                     </button>
+                    <button id="bron-yap-btn" class="filter-toggle-btn reservation-btn-v2"
+                        style="display: none; margin-bottom: 0; background-color: #27ae60; color: white; border: none; margin-left: 5px;">
+                        <i class="fas fa-chair"></i> <span data-i18n="bron_btn">Bron</span>
+                    </button>
                 </div>
                 <div id="main-filters-container" class="main-filters-container" style="display: none;">
                     <!-- Fiyat filtreleri JavaScript ile buraya doldurulacak -->
@@ -726,29 +730,141 @@
         </div>
     </div>
 
-    <!-- Firebase Compat SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <!-- Bron (Masa) Modalı -->
+    <div id="bron-modal" class="modal banquet-modal">
+        <div class="modal-content banquet-content" style="max-width: 500px;">
+            <span class="close-modal" id="close-bron-modal">&times;</span>
+            <div class="banquet-container">
+                <!-- Header Section -->
+                <div class="banquet-header" style="background: linear-gradient(135deg, #27ae60, #2ecc71);">
+                    <div class="banquet-restaurant-info">
+                        <i class="fas fa-chair banquet-icon"></i>
+                        <h2 id="bron-store-name" data-i18n="bron_title">Masa Bronlamak</h2>
+                    </div>
+                </div>
 
-    <script src="/firebase-config.js"></script>
-    <!-- ✅ YENİ: Çok dilli destek modülü -->
-    <script src="/language.js"></script>
+                <div class="banquet-body">
+                    <div class="banquet-hero" style="padding: 15px 0 5px;">
+                        <h1 data-i18n="bron_modal_title">Masa Bronlamak 🪑</h1>
+                    </div>
+
+                    <!-- Schema Section -->
+                    <div class="banquet-section">
+                        <div class="banquet-section-title">
+                            <i class="fas fa-map"></i>
+                            <span data-i18n="bron_schema_desc">Restoran şemasy</span>
+                        </div>
+                        <div class="bron-schema-container"
+                            style="background: #f9f9f9; border-radius: 12px; padding: 10px; text-align: center; margin-bottom: 20px;">
+                            <img id="bron-schema-img" src="" alt="Restoran Schema"
+                                style="max-width: 100%; border-radius: 8px; display: none; margin: 0 auto;">
+                            <div id="bron-no-schema" style="padding: 30px; color: #999;">
+                                <i class="fas fa-image" style="font-size: 32px; opacity: 0.3;"></i>
+                                <p style="margin-top: 10px;">Şema ýok</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reservation Form -->
+                    <form id="bron-form" class="banquet-form">
+                        <!-- Table Selection -->
+                        <div class="banquet-section">
+                            <div class="banquet-section-title" style="margin-bottom: 5px;">
+                                <i class="fas fa-th"></i>
+                                <span data-i18n="bron_table_no">Masa saýlaň</span>
+                            </div>
+                            <div class="form-group">
+                                <i class="fas fa-couch"
+                                    style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #888; z-index: 1;"></i>
+                                <select id="bron-table-number" required
+                                    style="width: 100%; padding: 12px 12px 12px 35px; border: 2px solid #eee; border-radius: 10px; font-weight: 500; appearance: none; background: white; position: relative;">
+                                    <option value="" data-i18n="bron_select_table">Masa saýlaň...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Date & Time -->
+                        <div class="banquet-section">
+                            <div class="banquet-section-title" style="margin-bottom: 5px;">
+                                <i class="fas fa-clock"></i>
+                                <span data-i18n="bron_time_title">Wagt we Sene</span>
+                            </div>
+                            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="form-group">
+                                    <label style="font-size: 12px; color: #666; margin-bottom: 5px; display: block;"
+                                        data-i18n="bron_date">Sene</label>
+                                    <input type="date" id="bron-date" required
+                                        style="width: 100%; padding: 10px; border: 2px solid #eee; border-radius: 10px;">
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size: 12px; color: #666; margin-bottom: 5px; display: block;"
+                                        data-i18n="bron_time">Sagat</label>
+                                    <input type="time" id="bron-time" required
+                                        style="width: 100%; padding: 10px; border: 2px solid #eee; border-radius: 10px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Customer Info -->
+                        <div class="banquet-section">
+                            <div class="banquet-section-title" style="margin-bottom: 5px;">
+                                <i class="fas fa-user"></i>
+                                <span data-i18n="banquet_contact_title">Habarlaşmak üçin</span>
+                            </div>
+                            <div class="contact-inputs" style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="form-group" style="position: relative;">
+                                    <i class="fas fa-user"
+                                        style="position: absolute; left: 12px; top: 18px; color: #888;"></i>
+                                    <input type="text" id="bron-customer-name" placeholder="Adyňyz"
+                                        data-i18n-placeholder="banquet_name_placeholder" required
+                                        style="width: 100%; padding: 12px 12px 12px 35px; border: 2px solid #eee; border-radius: 10px;">
+                                </div>
+                                <div class="form-group" style="position: relative;">
+                                    <i class="fas fa-phone"
+                                        style="position: absolute; left: 12px; top: 18px; color: #888;"></i>
+                                    <input type="tel" id="bron-customer-phone" placeholder="Telefon belgiňiz"
+                                        data-i18n-placeholder="order_phone_placeholder" required
+                                        style="width: 100%; padding: 12px 12px 12px 35px; border: 2px solid #eee; border-radius: 10px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="banquet-summary-card" style="margin-top: 20px;">
+                            <button type="submit" class="banquet-submit-btn"
+                                style="background: linear-gradient(135deg, #27ae60, #2ecc71); width: 100%; padding: 15px; border-radius: 12px; color: white; border: none; font-weight: 600; cursor: pointer;">
+                                <i class="fas fa-calendar-check"></i>
+                                <span data-i18n="bron_submit_btn">Bron et</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Firebase Compat SDK -->
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+        <script src="/firebase-config.js"></script>
+        <!-- ✅ YENİ: Çok dilli destek modülü -->
+        <script src="/language.js"></script>
 
 
 
-    <script src="/r2-config.js"></script>
+        <script src="/r2-config.js"></script>
 
-    <!-- Gerekli Kütüphaneler -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+        <!-- Gerekli Kütüphaneler -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- Google Drive API -->
-    <script src="https://apis.google.com/js/api.js"></script>
+        <!-- Google Drive API -->
+        <script src="https://apis.google.com/js/api.js"></script>
 
-    <!-- Ana Script -->
-    <script src="/script-cloudinary.js"></script>
+        <!-- Ana Script -->
+        <script src="/script-cloudinary.js"></script>
 
-    <!-- Excel Manager -->
-    <script src="/excel-manager.js"></script>
+        <!-- Excel Manager -->
+        <script src="/excel-manager.js"></script>
 </body>
 
 </html>

@@ -149,6 +149,8 @@
                             Kategoriyalar</a></li>
                     <li><a href="#" class="nav-link" data-section="reservations"><i class="fas fa-calendar-alt"></i>
                             Rezervasyonlar</a></li>
+                    <li><a href="#" class="nav-link" data-section="bron-management"><i class="fas fa-chair"></i>
+                            Bron Yönetimi</a></li>
                 </ul>
             </nav>
             <div class="sidebar-footer">
@@ -536,6 +538,95 @@
                     </div>
                 </section>
 
+                <!-- Bron Management Section -->
+                <section id="bron-management" class="content-section">
+                    <div class="section-header">
+                        <h2>Bron Zakazlary (Masa Rezervasyonu)</h2>
+                        <div class="header-actions" style="display: flex; gap: 15px; align-items: center;">
+                            <select id="bron-store-select"
+                                style="padding: 10px 15px; border-radius: 8px; border: 2px solid #e0e0e0; background: white; font-weight: 500; min-width: 200px; color: #333; outline: none;">
+                                <option value="">Magazyn saýlaň...</option>
+                            </select>
+                            <button id="open-bron-settings-btn" class="btn-primary"
+                                style="display: none; background-color: #6c5ce7;">
+                                <i class="fas fa-cog"></i> Bron Sazlamalary
+                            </button>
+                            <button id="refresh-bron-table-btn" class="btn-primary"
+                                style="display: none; background-color: #2ecc71; margin-left: 5px;">
+                                <i class="fas fa-sync-alt"></i> Täzele
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="bron-content-placeholder">
+                        <div
+                            style="text-align: center; padding: 60px 20px; color: #666; background: white; border-radius: 12px; border: 2px dashed #e0e0e0;">
+                            <i class="fas fa-chair"
+                                style="font-size: 48px; margin-bottom: 20px; color: var(--primary-color); opacity: 0.3;"></i>
+                            <p style="font-size: 16px; font-weight: 500;">Dowam etmek üçin ýokardan Bron hyzmaty açyk
+                                bolan bir magazyn saýlaň.</p>
+                        </div>
+                    </div>
+
+                    <div id="bron-content-area" style="display: none; margin-top: 25px;">
+                        <div class="table-container">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Stol No</th>
+                                        <th>Status</th>
+                                        <th>Sazlamalar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bron-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Bron Sazlamalary Modalı -->
+                <div id="bron-settings-modal" class="modal">
+                    <div class="modal-content" style="max-width: 600px;">
+                        <div class="modal-header">
+                            <h3>Bron Sazlamalary</h3>
+                            <span class="close-modal">&times;</span>
+                        </div>
+                        <div class="modal-body">
+                            <form id="bron-settings-form">
+                                <div class="form-group">
+                                    <label>Restoran Şemasy (Görsel)</label>
+                                    <input type="file" id="bron-settings-schema-image" accept="image/*">
+                                    <img id="bron-settings-schema-preview" class="upload-preview" alt="Şema Önizleme">
+                                    <input type="hidden" id="bron-settings-schema-url">
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Stol Maddalary *</label>
+                                    <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                                        <input type="number" id="bron-table-count-input" value="1" min="1" max="50"
+                                            style="width: 60px; padding: 5px; border-radius: 4px; border: 1px solid #ddd;">
+                                        <button type="button" class="btn-primary" id="add-bron-table-item"
+                                            style="background-color: #27ae60; padding: 5px 15px; border-radius: 4px;">
+                                            <i class="fas fa-plus-circle"></i> Stol goş
+                                        </button>
+                                    </div>
+                                    <div id="bron-settings-table-items" class="dynamic-rows">
+                                        <!-- Masalar JS ile buraya eklenecek -->
+                                    </div>
+                                    <p style="font-size: 12px; color: #666; margin-top: 5px;">Müşderiler bu sanawdan
+                                        stol saýlap bilerler.</p>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="button" class="btn-secondary" id="cancel-bron-settings">Aýyr</button>
+                                    <button type="submit" class="btn-primary">Sazlamalary ýatda sakla</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Ana Kategori Modalı -->
                 <div id="parent-category-modal" class="modal">
                     <div class="modal-content" style="max-width: 500px;">
@@ -677,12 +768,25 @@
                         <input type="tel" id="store-order-phone" placeholder="+993 XX XX XX XX">
                     </div>
 
-                    <!-- ✅ YENİ: Rezervasyon Özelliği -->
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="store-has-reservation">
-                            <span>Bu magazyn rezervasyon hyzmatyny hödürleýär</span>
+                            <span>Bu magazyn rezervasyon hyzmatyny hödürleýär (Banket)</span>
                         </label>
+                    </div>
+
+                    <!-- ✅ YENİ: Bron Özelliği -->
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="store-has-bron">
+                            <span>Bu magazyn Bron (Masa) hyzmatyny hödürleýär</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Restoran Şemasy (Bron üçin)</label>
+                        <input type="file" id="store-schema-image" accept="image/*">
+                        <img id="store-schema-preview" class="upload-preview" alt="Şema">
+                        <input type="hidden" id="store-schema-url">
                     </div>
 
                     <div class="form-actions">

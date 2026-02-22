@@ -1,42 +1,45 @@
 document.addEventListener('DOMContentLoaded', async () => {
 
     // --- DOM ELEMANLARI ---
-    const storeList = document.getElementById('store-list');
-    const productsGrid = document.getElementById('products-grid');
-    const searchInput = document.getElementById('search-input');
-    const searchButton = document.getElementById('search-button');
-    const cartButton = document.getElementById('cart-button');
-    const favoritesButton = document.getElementById('favorites-button');
-    const cartCount = document.querySelector('.cart-count');
-    const favoritesCount = document.querySelector('.favorites-count');
-    const loadingOverlay = document.getElementById('loading-overlay');
+    var storeList = document.getElementById('store-list');
+    var productsGrid = document.getElementById('products-grid');
+    var searchInput = document.getElementById('search-input');
+    var searchButton = document.getElementById('search-button');
+    var cartButton = document.getElementById('cart-button');
+    var favoritesButton = document.getElementById('favorites-button');
+    var cartCount = document.querySelector('.cart-count');
+    var favoritesCount = document.querySelector('.favorites-count');
+    var loadingOverlay = document.getElementById('loading-overlay');
+    var storeBanner = document.getElementById('store-banner');
+    var heroSection = document.querySelector('.hero-section');
+    var infoSection = document.querySelector('.info-section');
 
     // Mobil menü elemanları
-    const menuToggle = document.getElementById('menu-toggle');
-    const menuClose = document.getElementById('menu-close');
-    const storeMenu = document.getElementById('store-menu');
-    const menuOverlay = document.getElementById('menu-overlay');
+    var menuToggle = document.getElementById('menu-toggle');
+    var menuClose = document.getElementById('menu-close');
+    var storeMenu = document.getElementById('store-menu');
+    var menuOverlay = document.getElementById('menu-overlay');
 
     // 404 sayfası elemanları
-    const notFoundSection = document.getElementById('not-found');
-    const backHomeLink = document.getElementById('back-home-link');
+    var notFoundSection = document.getElementById('not-found');
+    var backHomeLink = document.getElementById('back-home-link');
 
     // Ayrılmış filtreleme elemanları
-    const categoryFiltersSection = document.getElementById('category-filters-section');
-    const mainFiltersSection = document.getElementById('main-filters-section');
-    const mainFilterToggleBtn = document.getElementById('main-filter-toggle-btn');
-    const mainFiltersContainer = document.getElementById('main-filters-container');
-    const reservationBtn = document.getElementById('rezervasyon-yap-btn'); // ✅ GÜNCELLENDİ
-
+    var categoryFiltersSection = document.getElementById('category-filters-section');
+    var mainFiltersSection = document.getElementById('main-filters-section');
+    var mainFilterToggleBtn = document.getElementById('main-filter-toggle-btn');
+    var mainFiltersContainer = document.getElementById('main-filters-container');
+    var reservationBtn = document.getElementById('rezervasyon-yap-btn');
+    var bronBtn = document.getElementById('bron-yap-btn');
 
     // --- DURUM DEĞİŞKENLERİ (STATE) ---
-    let cart = JSON.parse(localStorage.getItem('showlyCart')) || {}; // Mağaza bazlı sepet: { storeId: { storeName, items: [] } }
-    let favorites = JSON.parse(localStorage.getItem('showlyFavorites')) || [];
-    let currentStoreId = null;
-    let allStores = [];
-    let allProducts = [];
-    let currentActiveFilter = null; // ✅ Filtreyi global takip et
-    window.isInitialLoadComplete = false; // ✅ Verilerin tam yüklendiğini takip et
+    var cart = JSON.parse(localStorage.getItem('showlyCart')) || {};
+    var favorites = JSON.parse(localStorage.getItem('showlyFavorites')) || [];
+    var currentStoreId = null;
+    var allStores = [];
+    var allProducts = [];
+    var currentActiveFilter = null;
+    window.isInitialLoadComplete = false;
 
     // SMS URL açma fonksiyonu
     function openSmsUrl(url, phoneNumber, orderText) {
@@ -121,6 +124,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // --- INDEXEDDB YARDIMCI SİSTEMİ (Ürün Önbelleği İçin) ---
+    const IDB_CONFIG = { name: 'ShowlyProductsDB', store: 'products', version: 1 };
+
+    const showlyIDB = {
+        _db: null,
+        async init() {
+            if (this._db) return this._db;
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(IDB_CONFIG.name, IDB_CONFIG.version);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(IDB_CONFIG.store)) {
+                        db.createObjectStore(IDB_CONFIG.store, { keyPath: 'id' });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    this._db = e.target.result;
+                    resolve(this._db);
+                };
+                request.onerror = (e) => reject(e.target.error);
+            });
+        },
+        async saveProducts(products) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(IDB_CONFIG.store, 'readwrite');
+                const store = transaction.objectStore(IDB_CONFIG.store);
+                products.forEach(p => store.put(p));
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = (e) => reject(e.target.error);
+            });
+        },
+        async getProductsStore(storeId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(IDB_CONFIG.store, 'readonly');
+                const store = transaction.objectStore(IDB_CONFIG.store);
+                const request = store.getAll();
+                request.onsuccess = () => {
+                    const allP = request.result || [];
+                    resolve(allP.filter(p => p.storeId === storeId));
+                };
+                request.onerror = (e) => reject(e.target.error);
+            });
+        }
+    };
+
     // Veri yükleme akışını en sona taşıdık (hoisting sorunlarını önlemek için)
 
     // ✅ Veri çekme ve önbellekleme fonksiyonu
@@ -144,8 +194,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const data = await response.json();
 
+            console.log('📦 Worker Ham Veri (Raw):', data);
+
             if (!data || !data.stores) {
+                console.warn('⚠️ Worker geçersiz format döndürdü:', data);
                 throw new Error('Geçersiz veri formatı (Worker)');
+            }
+
+            if (data.stores.length === 0) {
+                console.warn('⚠️ Worker verisi boş geldi (0 mağaza), Firebase yedeğine geçiliyor...');
+                throw new Error('Worker empty data');
             }
 
             if (onlyStores) {
@@ -156,18 +214,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             allStores = data.stores;
-            allProducts = data.products;
-            window.isInitialLoadComplete = true; // ✅ Tam yükleme bitti
+            // Global ürün yüklemesi kaldırıldı - Lazy Loading kullanılacak
+            window.isInitialLoadComplete = true; // ✅ Temel yükleme bitti
             window.allParentCategories = data.parentCategories || [];
             window.allSubcategories = data.subcategories || [];
             window.allOldCategories = data.categories || [];
 
-            console.log(`✅ ${allStores.length} mağaza ve ${allProducts.length} ürün yüklendi (Worker)`);
+            console.log(`✅ ${allStores.length} mağaza ve temel veriler yüklendi (Worker)`);
 
-            // Önbelleğe kaydet (Sadece tam veri yüklendiğinde)
+            // Önbelleğe kaydet (Sadece mağaza verileri)
             setCachedData({
                 stores: allStores,
-                products: allProducts,
                 parentCategories: window.allParentCategories,
                 subcategories: window.allSubcategories,
                 categories: window.allOldCategories
@@ -182,26 +239,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Firebase fallback
             try {
-                const [storesSnap, productsSnap, parentCatsSnap, subCatsSnap, catsSnap] = await Promise.all([
+                const [storesSnap, parentCatsSnap, subCatsSnap, catsSnap] = await Promise.all([
                     window.db.collection('stores').get(),
-                    window.db.collection('products').get(),
                     window.db.collection('parentCategories').get(),
                     window.db.collection('subcategories').get(),
                     window.db.collection('categories').get()
                 ]);
 
                 allStores = storesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                allProducts = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Global ürün yüklemesi kaldırıldı - Lazy Loading kullanılacak
                 window.allParentCategories = parentCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.allSubcategories = subCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                 window.allOldCategories = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 window.isInitialLoadComplete = true; // ✅ Tam yükleme bitti
-                console.log(`✅ ${allStores.length} mağaza ve ${allProducts.length} ürün yüklendi (Firebase)`);
+                console.log(`✅ ${allStores.length} mağaza ve temel veriler yüklendi (Firebase)`);
 
                 setCachedData({
                     stores: allStores,
-                    products: allProducts,
                     parentCategories: window.allParentCategories,
                     subcategories: window.allSubcategories,
                     categories: window.allOldCategories
@@ -216,11 +271,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- YÖNLENDİRME (ROUTING) FONKSİYONU ---
-    const router = async () => {
+    async function router() {
         const path = window.location.pathname.replace('/', '');
-        const heroSection = document.querySelector('.hero-section');
-        const infoSection = document.querySelector('.info-section');
-        const storeBanner = document.getElementById('store-banner');
 
         if (!path) { // Ana sayfaysak
             lastRenderedStoreId = null; // ✅ Mağazaya geri dönünce kartlar yeniden oluşturulsun
@@ -264,7 +316,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (notFoundSection) notFoundSection.style.display = 'block';
             document.title = 'Sahypa tapylmady - Showly';
         }
-    };
+    }
 
     // ✅ PERFORMANS: Skeleton screen fonksiyonu
     function showStoreSkeleton() {
@@ -591,14 +643,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const discountedProducts = storeProducts.filter(p => p.isOnSale);
         const expensiveProducts = storeProducts.filter(p => parseFloat(p.price.replace(' TMT', '')) > 500);
 
-        // ✅ MEVCUT REZERVASYON BUTONUNU YÖNET
+        // ✅ MEVCUT REZERVASYON (BANKET) BUTONUNU YÖNET
         const existingReservationBtn = document.getElementById('rezervasyon-yap-btn');
+        const existingBronBtn = document.getElementById('bron-yap-btn');
+
         if (existingReservationBtn) {
             if (store && store.hasReservation) {
                 existingReservationBtn.style.display = 'inline-flex';
                 existingReservationBtn.onclick = () => openBanquetPlanning(storeId);
             } else {
                 existingReservationBtn.style.display = 'none';
+            }
+        }
+
+        // ✅ YENİ: BRON BUTONUNU YÖNET
+        if (existingBronBtn) {
+            if (store && store.hasBron) {
+                existingBronBtn.style.display = 'inline-flex';
+                existingBronBtn.onclick = () => openBronPlanning(storeId);
+            } else {
+                existingBronBtn.style.display = 'none';
             }
         }
 
@@ -659,22 +723,90 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ✅ PERFORMANS: Hangi mağazanın kartları oluşturuldu
     let lastRenderedStoreId = null;
 
+    // ✅ YENİ: Mağaza bazlı tembel yükleme (Lazy Loading) fonksiyonu
+    async function getStoreProducts(storeId) {
+        // 1. Önce çalışma zamanı hafızasına bak
+        let products = allProducts.filter(p => p.storeId === storeId);
+        if (products.length > 0) return products;
+
+        // 2. IndexedDB (Yerel Hafıza) kontrolü
+        try {
+            products = await showlyIDB.getProductsStore(storeId);
+            if (products.length > 0) {
+                console.log(`📦 Ürünler IndexedDB'den yüklendi (${storeId})`);
+                // Hafızayı güncelle (hızlı erişim için)
+                allProducts = [...allProducts, ...products];
+                return products;
+            }
+        } catch (e) {
+            console.warn('IDB okuma hatası:', e);
+        }
+
+        // 3. Worker (Bulut - API) - SADECE bu mağazanın ürünlerini çek
+        try {
+            const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
+            console.log(`☁️ Ürünler Worker üzerinden çekiliyor (${storeId})...`);
+
+            const response = await fetch(`${WORKER_URL}?storeId=${storeId}`, {
+                method: 'GET',
+                mode: 'cors'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                products = data.products || [];
+
+                if (products.length > 0) {
+                    // Hafızaya ve IndexedDB'ye kaydet
+                    allProducts = [...allProducts, ...products];
+                    await showlyIDB.saveProducts(products);
+                    console.log(`✅ ${products.length} ürün Worker'dan indirildi ve kaydedildi.`);
+                    return products;
+                }
+            } else {
+                console.warn('Worker on-demand hatası, Firebase yedeğine geçiliyor...');
+            }
+        } catch (err) {
+            console.warn('Worker bağlantı hatası, Firebase yedeğine geçiliyor...', err);
+        }
+
+        // 4. Firebase (Yedek) - Worker çalışmazsa direkt Firebase'den çek
+        try {
+            const snap = await window.db.collection('products')
+                .where('storeId', '==', storeId)
+                .get();
+
+            products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            if (products.length > 0) {
+                // Hafızaya ve IndexedDB'ye kaydet
+                allProducts = [...allProducts, ...products];
+                await showlyIDB.saveProducts(products);
+                console.log(`✅ ${products.length} ürün Firebase'den indirildi ve kaydedildi.`);
+            }
+            return products;
+        } catch (err) {
+            console.error('❌ Ürün çekme hatası:', err);
+            return [];
+        }
+    }
+
     const renderStorePage = async (storeId, activeFilter = null) => {
         currentActiveFilter = activeFilter; // ✅ Global filtreyi güncelle
         const store = allStores.find(s => s.id === storeId);
         if (!store) return;
 
-        const storeProducts = allProducts.filter(p => p.storeId === storeId);
+        // ✅ PERFORMANS: Ürünleri 'Tembel Yükleme' (Lazy Loading) yöntemiyle getir
+        let storeProducts = await getStoreProducts(storeId);
 
-        // ✅ PERFORMANS: Ürünlerin varlığını ve kartların oluşturulup oluşturulmadığını kontrol et
+        // Ürünler haala yoksa (ilk defa çekiliyorsa), skeleton göster ve bekle
         const hasProducts = storeProducts.length > 0;
         const isNewStore = currentStoreId !== storeId;
         const cardsNeeded = productsGrid && productsGrid.querySelector('.product-card:not(.skeleton-card)') === null;
 
-        // Ürünler yoksa ama mağaza yeni değilse ve kartlar da yoksa, beklemeye devam et (skeleton zaten vardır)
-        if (!hasProducts && !isNewStore && cardsNeeded) {
-            console.log('⏳ Ürünler henüz yüklenmedi, bekleniyor...');
-            return;
+        if (!hasProducts && isNewStore) {
+            console.log('⏳ Ürünler Firebase veya IDB\'den bekleniyor...');
+            showStoreSkeleton();
         }
 
         // ✅ Ziyaret sayısını SADECE mağaza ilk açıldığında artır
@@ -702,8 +834,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 productsGrid.innerHTML = '';
                 productsGrid.style.display = 'grid';
             }
-
-            const storeBanner = document.getElementById('store-banner');
 
             // ✅ Banner skeleton/içerik sadece mağaza değiştiğinde güncellenir
             if (isNewStore && storeBanner) {
@@ -968,7 +1098,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- ARAMA FONKSİYONU (✅ ÇOK DİLLİ) ---
-    const performSearch = () => {
+    const performSearch = async () => {
         const query = searchInput.value.trim().toLowerCase();
         if (query === '') {
             showNotification(translate('search_empty_warning'));
@@ -978,19 +1108,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ✅ Çok dilli arama: seçili dile göre alan belirle
         const sLang = getSelectedLang();
 
-        let productsToSearch = currentStoreId
-            ? allProducts.filter(p => p.storeId === currentStoreId)
-            : allProducts;
+        let productsToSearch = [];
+        if (currentStoreId) {
+            productsToSearch = allProducts.filter(p => p.storeId === currentStoreId);
+        } else {
+            // Ana sayfada isek IndexedDB'deki TÜM yerel ürünlerde ara
+            try {
+                const db = await showlyIDB.init();
+                const transaction = db.transaction(IDB_CONFIG.store, 'readonly');
+                const store = transaction.objectStore(IDB_CONFIG.store);
+                productsToSearch = await new Promise(res => {
+                    const req = store.getAll();
+                    req.onsuccess = () => res(req.result || []);
+                    req.onerror = () => res(allProducts);
+                });
+            } catch (e) {
+                productsToSearch = allProducts;
+            }
+        }
 
         const filteredProducts = productsToSearch.filter(product => {
             const name = getProductField(product, 'name', sLang).toLowerCase();
             const desc = getProductField(product, 'desc', sLang).toLowerCase();
             return name.includes(query) || desc.includes(query);
         });
-
-        const heroSection = document.querySelector('.hero-section');
-        const infoSection = document.querySelector('.info-section');
-        const storeBanner = document.getElementById('store-banner');
 
         if (heroSection) heroSection.style.display = 'none';
         if (infoSection) infoSection.style.display = 'none';
@@ -2233,6 +2374,171 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- Bron (Masa) Planlama Mantığı ---
+    const bronModal = document.getElementById('bron-modal');
+    const closeBronModal = document.getElementById('close-bron-modal');
+    const bronForm = document.getElementById('bron-form');
+
+    window.openBronPlanning = async function (storeId) {
+        // Önce güncel mağaza verisini çek (önbellek baypas için)
+        let store = null;
+        try {
+            const doc = await window.db.collection('stores').doc(storeId).get({ source: 'server' }); // ✅ Zorlamalı taze veri
+            if (doc.exists) {
+                store = { id: doc.id, ...doc.data() };
+                // allStores önbelleğini de güncelle
+                const idx = allStores.findIndex(s => s.id === storeId);
+                if (idx !== -1) allStores[idx] = store;
+            }
+        } catch (e) {
+            console.error('Mağaza verisi çekilemedi:', e);
+            store = allStores.find(s => s.id === storeId);
+        }
+
+        if (!store) return;
+
+        currentStoreId = storeId; // ✅ GÜNCELLENDİ: Global Store ID'yi set et
+        console.log('📱 Bron modalı açıldı. Store ID:', currentStoreId, 'Mağaza Adı:', store.name);
+
+        const bronSchemaImg = document.getElementById('bron-schema-img');
+        const bronNoSchema = document.getElementById('bron-no-schema');
+        const tableSelect = document.getElementById('bron-table-number');
+
+        // Şemayı göster
+        if (store.restaurantSchemaUrl) {
+            bronSchemaImg.src = store.restaurantSchemaUrl;
+            bronSchemaImg.style.display = 'block';
+            bronNoSchema.style.display = 'none';
+        } else {
+            bronSchemaImg.style.display = 'none';
+            bronNoSchema.style.display = 'block';
+        }
+
+        // Masaları doldur
+        if (tableSelect) {
+            tableSelect.innerHTML = `<option value="">${translate('bron_select_table', getSelectedLang())}</option>`;
+            if (Array.isArray(store.tables) && store.tables.length > 0) {
+                store.tables.forEach(table => {
+                    const option = document.createElement('option');
+                    option.value = table;
+                    option.textContent = table;
+                    tableSelect.appendChild(option);
+                });
+            }
+        }
+
+        if (bronModal) {
+            bronModal.style.display = 'block';
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+
+            history.pushState({ modal: 'bron-modal' }, '', window.location.href);
+
+            const dateInput = document.getElementById('bron-date');
+            if (dateInput) {
+                const today = new Date().toISOString().split('T')[0];
+                dateInput.setAttribute('min', today);
+                dateInput.value = today;
+            }
+        }
+    };
+
+    closeBronModal?.addEventListener('click', () => {
+        if (bronModal) {
+            history.back();
+        }
+    });
+
+    bronForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const submitBtn = bronForm.querySelector('.banquet-submit-btn');
+        const originalText = submitBtn.innerHTML;
+
+        const customerName = document.getElementById('bron-customer-name')?.value;
+        const customerPhone = document.getElementById('bron-customer-phone')?.value;
+        const eventDate = document.getElementById('bron-date')?.value; // YYYY-MM-DD
+        const eventTime = document.getElementById('bron-time')?.value; // HH:MM
+        const tableNumber = document.getElementById('bron-table-number')?.value;
+
+        if (!customerName || !customerPhone || !eventDate || !eventTime || !tableNumber) {
+            showNotification(translate('banquet_fill_all', getSelectedLang()), false);
+            return;
+        }
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${translate('banquet_submitting', getSelectedLang())}`;
+
+            // --- ÇAKIŞMA KONTROLÜ (CONFLICT CHECK) ---
+            console.log('🔍 Çakışma kontrolü yapılıyor... Store:', currentStoreId, 'Tablo:', tableNumber);
+            const snapshot = await window.db.collection('orders')
+                .where('storeId', '==', String(currentStoreId).trim())
+                .where('orderType', '==', 'bron')
+                .get({ source: 'server' }); // ✅ Zorlamalı taze veri
+
+            const existingReservations = snapshot.docs.map(doc => doc.data());
+
+            // Seçilen zamanı Date objesine çevir
+            const requestedDateTime = new Date(`${eventDate}T${eventTime}`);
+
+            const hasConflict = existingReservations.some(res => {
+                // Not: customer.address formatımız "Bron Senesi: YYYY-MM-DD HH:MM"
+                // Ya da note kısmında "Stol No: X" veya "Masa No: X" var.
+                const resTable = res.customer.note.replace('Stol No: ', '').replace('Masa No: ', '');
+                if (resTable !== tableNumber) return false;
+
+                const resDateTimeStr = res.customer.address.replace('Bron Senesi: ', '');
+                const resDateTime = new Date(resDateTimeStr.replace(' ', 'T'));
+
+                // ±2 saat (120 dakika) fark kontrolü
+                const diffMs = Math.abs(requestedDateTime - resDateTime);
+                const diffMinutes = diffMs / (1000 * 60);
+
+                return diffMinutes < 120; // 2 saatten az fark varsa çakışma var
+            });
+
+            if (hasConflict) {
+                showNotification(translate('bron_already_booked', getSelectedLang()), false);
+                return;
+            }
+
+            const bronData = {
+                orderType: 'bron',
+                storeId: String(currentStoreId).trim(),
+                customer: {
+                    name: customerName,
+                    phone: customerPhone,
+                    address: `Bron Senesi: ${eventDate} ${eventTime}`,
+                    note: `Stol No: ${tableNumber}`
+                },
+                items: [{
+                    id: 'bron_table',
+                    title: `Bron: ${tableNumber}`,
+                    price: 0,
+                    quantity: 1
+                }],
+                totalPrice: 0,
+                status: 'pending',
+                date: new Date().toISOString(),
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            console.log('📤 Bron verisi kaydediliyor (StoreId: ' + currentStoreId + '):', bronData);
+            const docRef = await window.db.collection('orders').add(bronData);
+            console.log('✅ Bron başarıyla kaydedildi! Kayıt ID:', docRef.id);
+            showNotification(translate('banquet_success', getSelectedLang()), true);
+            history.back();
+            bronForm.reset();
+        } catch (error) {
+            console.error('❌ Bron hatası:', error);
+            showNotification(translate('banquet_error', getSelectedLang()), false);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+
     // ✅ YENİ: Dil değişim callback'i – DOM yeniden oluşturulmadan güncelleme
     onLanguageChange((newLang) => {
         // 1. Statik metinleri güncelle (data-i18n / data-i18n-placeholder)
@@ -2310,12 +2616,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- İLK YÜKLEME ---
     // --- BAŞLATMA MANTIĞI (Sözdizimi ve Kapsam Sorunlarını Önlemek İçin En Sonda) ---
-    const initApp = async () => {
-        const cachedData = getCachedData();
+    async function initApp() {
+        var cachedData = getCachedData();
 
         if (cachedData && !isDirectStoreAccess) {
-            allStores = cachedData.stores;
-            allProducts = cachedData.products;
+            allStores = cachedData.stores || [];
+            allProducts = cachedData.products || [];
             window.allParentCategories = cachedData.parentCategories || [];
             window.allSubcategories = cachedData.subcategories || [];
             window.allOldCategories = cachedData.categories || [];
@@ -2329,8 +2635,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (isDirectStoreAccess) {
             if (loadingOverlay) loadingOverlay.style.display = 'flex';
             if (cachedData) {
-                allStores = cachedData.stores;
-                allProducts = cachedData.products;
+                allStores = cachedData.stores || [];
+                allProducts = cachedData.products || [];
                 window.allParentCategories = cachedData.parentCategories || [];
                 window.allSubcategories = cachedData.subcategories || [];
                 window.allOldCategories = cachedData.categories || [];
@@ -2355,7 +2661,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 router();
             });
         }
-    };
+    }
 
     initApp();
 });

@@ -375,6 +375,61 @@
             tm: 'Banket',
             ru: 'Банкет',
             en: 'Banquet'
+        },
+        bron_btn: {
+            tm: 'Bron',
+            ru: 'Бронирование',
+            en: 'Booking'
+        },
+        bron_modal_title: {
+            tm: 'Stol Bronlamak',
+            ru: 'Бронирование стола',
+            en: 'Table Booking'
+        },
+        bron_title: {
+            tm: 'Masa Bronlamak',
+            ru: 'Бронирование стола',
+            en: 'Table Booking'
+        },
+        bron_select_table: {
+            tm: 'Stol saýlaň...',
+            ru: 'Выберите стол...',
+            en: 'Select table...'
+        },
+        bron_schema_desc: {
+            tm: 'Restoran şemasy',
+            ru: 'Схема ресторана',
+            en: 'Restaurant schema'
+        },
+        bron_table_no: {
+            tm: 'Stol saýlaň',
+            ru: 'Выберите стол',
+            en: 'Select table'
+        },
+        bron_time_title: {
+            tm: 'Wagt we Sene',
+            ru: 'Время и Дата',
+            en: 'Time and Date'
+        },
+        bron_date: {
+            tm: 'Sene',
+            ru: 'Дата',
+            en: 'Date'
+        },
+        bron_time: {
+            tm: 'Sagat',
+            ru: 'Час',
+            en: 'Time'
+        },
+        bron_submit_btn: {
+            tm: 'Bron et',
+            ru: 'Забронировать',
+            en: 'Book now'
+        },
+        bron_already_booked: {
+            tm: 'Gynansakda, bu masa eýýäm saýlanan wagtda bronlanan. Başga wagt ýa-da masa saýlap görüň.',
+            ru: 'К сожалению, этот стол уже забронирован на выбранное время. Пожалуйста, выберите другое время или стол.',
+            en: 'Unfortunately, this table is already booked for the selected time. Please choose another time or table.'
         }
     };
 

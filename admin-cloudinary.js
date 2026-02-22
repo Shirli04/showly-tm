@@ -37,7 +37,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const reservationPackageForm = document.getElementById('reservation-package-form');
     const cancelPackage = document.getElementById('cancel-package');
 
+    // Bron elemanları
+    const bronStoreSelect = document.getElementById('bron-store-select');
+    const openBronSettingsBtn = document.getElementById('open-bron-settings-btn');
+    const bronContentPlaceholder = document.getElementById('bron-content-placeholder');
+    const bronContentArea = document.getElementById('bron-content-area');
+    const refreshBronTableBtn = document.getElementById('refresh-bron-table-btn');
+
+    const bronSettingsModal = document.getElementById('bron-settings-modal');
+    const bronSettingsForm = document.getElementById('bron-settings-form');
+    const bronSettingsSchemaImage = document.getElementById('bron-settings-schema-image');
+    const bronSettingsSchemaPreview = document.getElementById('bron-settings-schema-preview');
+    const bronSettingsSchemaUrl = document.getElementById('bron-settings-schema-url');
+    const bronSettingsTableItems = document.getElementById('bron-settings-table-items');
+    const addBronTableItemBtn = document.getElementById('add-bron-table-item');
+    const bronTableCountInput = document.getElementById('bron-table-count-input');
+    const cancelBronSettings = document.getElementById('cancel-bron-settings');
+
     let currentReservationStoreId = null;
+    let currentBronStoreId = null;
     let editingPackageId = null;
 
     // ✅ GLOBAL VERİ DEĞİŞKENLERİ (Grafikler ve filtreleme için)
@@ -105,12 +123,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const productImagePreview = document.getElementById('product-image-preview');
     const productImageStatus = document.getElementById('product-image-status');
 
+    // Bron elemanları
+    const bronTableBody = document.getElementById('bron-table-body');
+    const storeSchemaImage = document.getElementById('store-schema-image');
+    const storeSchemaPreview = document.getElementById('store-schema-preview');
+    const storeSchemaUrl = document.getElementById('store-schema-url');
+
     let editingStoreId = null;
     let editingProductId = null;
     let uploadedProductImageUrl = null;
+    let uploadedSchemaUrl = null;
 
     // Form gönderme kontrolü
     let isSubmitting = false;
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const sectionId = link.getAttribute('data-section');
+
+            // Aktif linki değiştir
+            navLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+
+            // Bölümleri göster/gizle
+            contentSections.forEach(section => {
+                section.classList.remove('active');
+                if (section.id === sectionId) {
+                    section.classList.add('active');
+                }
+            });
+
+            // Sayfa başlığını güncelle
+            const text = link.querySelector('span')?.textContent || link.textContent.trim();
+            pageTitle.textContent = text;
+
+            // Bölgeye özel veri yükleme (Opsiyonel)
+            if (sectionId === 'stores') renderStoresTable();
+            if (sectionId === 'products') renderProductsTable();
+            if (sectionId === 'orders') renderOrdersTable();
+            if (sectionId === 'users') renderUsersTable();
+            if (sectionId === 'categories') {
+                renderParentCategoriesTable();
+                renderSubcategoriesTable();
+            }
+            if (sectionId === 'reservations') renderReservationStores();
+            if (sectionId === 'bron-management') renderBronStores();
+
+            // Mobilde sidebar'ı kapat
+            if (window.innerWidth <= 1024) {
+                adminSidebar.classList.remove('active');
+            }
+        });
+    });
 
 
 
@@ -195,8 +260,243 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Dosya yükleme durumunu göster
     const showUploadStatus = (element, message, isSuccess = true) => {
+        if (!element) return;
         element.textContent = message;
         element.className = `upload-status show ${isSuccess ? 'success' : 'error'}`;
+    };
+
+    // Şema resmi önizleme
+    storeSchemaImage?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                storeSchemaPreview.src = event.target.result;
+                storeSchemaPreview.classList.add('show');
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Bron mağazalarını seçeneğe ekle
+    const renderBronStores = async () => {
+        if (!bronStoreSelect) return;
+        const stores = await window.showlyDB.getStores();
+        const bronStores = stores.filter(s => s.hasBron || (Array.isArray(s.tables) && s.tables.length > 0));
+
+        bronStoreSelect.innerHTML = '<option value="">Magazyn saýlaň...</option>';
+        bronStores.forEach(store => {
+            const option = document.createElement('option');
+            option.value = store.id;
+            option.textContent = store.name;
+            bronStoreSelect.appendChild(option);
+        });
+
+        if (currentBronStoreId) {
+            bronStoreSelect.value = currentBronStoreId;
+        }
+    };
+
+    // Bron mağaza seçildiğinde
+    bronStoreSelect?.addEventListener('change', (e) => {
+        currentBronStoreId = e.target.value;
+        if (currentBronStoreId) {
+            bronContentPlaceholder.style.display = 'none';
+            bronContentArea.style.display = 'block';
+            if (openBronSettingsBtn) openBronSettingsBtn.style.display = 'block';
+            if (refreshBronTableBtn) refreshBronTableBtn.style.display = 'block'; // ✅ Yeni butonu göster
+            renderBronTable();
+        } else {
+            bronContentPlaceholder.style.display = 'block';
+            bronContentArea.style.display = 'none';
+            if (openBronSettingsBtn) openBronSettingsBtn.style.display = 'none';
+            if (refreshBronTableBtn) refreshBronTableBtn.style.display = 'none'; // ✅ Yeni butonu gizle
+        }
+    });
+
+    // Bron Tablosunu Manuel Yenile
+    refreshBronTableBtn?.addEventListener('click', () => {
+        renderBronTable();
+    });
+
+    // Bron Sazlamalary Aç
+    openBronSettingsBtn?.addEventListener('click', async () => {
+        if (!currentBronStoreId) return;
+        const storeId = currentBronStoreId;
+
+        // ✅ Hemen temizle (Yükleme sırasında eski veri görünmesin)
+        bronSettingsSchemaPreview.src = '';
+        bronSettingsSchemaPreview.classList.remove('show');
+        bronSettingsSchemaUrl.value = '';
+        bronSettingsTableItems.innerHTML = '<div style="text-align:center; padding:10px;"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</div>';
+
+        try {
+            // ✅ Zorlamalı taze veri çek (globalStores bazen gecikebilir)
+            const doc = await window.db.collection('stores').doc(storeId).get({ source: 'server' });
+            if (!doc.exists) return;
+            const store = { id: doc.id, ...doc.data() };
+            console.log('📖 Bron ayarları açılıyor. Mağaza:', store.name);
+
+            // Mevcut verileri yükle
+            if (store.restaurantSchemaUrl) {
+                bronSettingsSchemaPreview.src = store.restaurantSchemaUrl;
+                bronSettingsSchemaPreview.classList.add('show');
+                bronSettingsSchemaUrl.value = store.restaurantSchemaUrl;
+            }
+
+            // Clear the loading spinner and then add tables
+            bronSettingsTableItems.innerHTML = '';
+
+            if (Array.isArray(store.tables) && store.tables.length > 0) {
+                store.tables.forEach(table => {
+                    bronSettingsTableItems.appendChild(createBronTableUI(table));
+                });
+            } else {
+                // En az bir boş satır ekle
+                bronSettingsTableItems.appendChild(createBronTableUI(''));
+            }
+
+            bronSettingsModal.style.display = 'block';
+        } catch (error) {
+            console.error('Bron ayarları yüklenemedi:', error);
+            showNotification('Hata oluştu!', false);
+        }
+    });
+
+    function createBronTableUI(tableValue = '') {
+        const row = document.createElement('div');
+        row.className = 'dynamic-row';
+        row.innerHTML = `
+            <input type="text" class="bron-table-input" required value="${tableValue}" placeholder="Örn: Stol 1" style="flex: 1;">
+            <button type="button" class="btn-remove-row"><i class="fas fa-minus-circle"></i> Poz</button>
+        `;
+        row.querySelector('.btn-remove-row').addEventListener('click', () => row.remove());
+        return row;
+    }
+
+    addBronTableItemBtn?.addEventListener('click', () => {
+        const count = parseInt(bronTableCountInput?.value) || 1;
+
+        for (let i = 0; i < count; i++) {
+            const currentInputs = bronSettingsTableItems.querySelectorAll('.bron-table-input');
+            let maxNum = 0;
+            currentInputs.forEach(input => {
+                const val = input.value;
+                const numMatch = val.match(/\d+/);
+                if (numMatch) {
+                    const num = parseInt(numMatch[0]);
+                    if (num > maxNum) maxNum = num;
+                }
+            });
+            const nextNumber = maxNum + 1;
+            bronSettingsTableItems.appendChild(createBronTableUI(`Stol ${nextNumber}`));
+        }
+
+        // Input'u sıfırla (isteğe bağlı)
+        if (bronTableCountInput) bronTableCountInput.value = 1;
+    });
+
+    bronSettingsSchemaImage?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                bronSettingsSchemaPreview.src = event.target.result;
+                bronSettingsSchemaPreview.classList.add('show');
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    bronSettingsForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentBronStoreId) return;
+
+        const submitBtn = bronSettingsForm.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ýüklenýär...';
+
+            let schemaUrl = bronSettingsSchemaUrl.value;
+
+            // Eğer yeni bir görsel seçildiyse yükle
+            if (bronSettingsSchemaImage.files[0]) {
+                schemaUrl = await window.uploadToR2(bronSettingsSchemaImage.files[0], `BronSchemas_${currentBronStoreId}`);
+            }
+
+            const tables = Array.from(bronSettingsTableItems.querySelectorAll('.bron-table-input'))
+                .map(input => input.value.trim())
+                .filter(val => val !== '');
+
+            await window.db.collection('stores').doc(currentBronStoreId).update({
+                restaurantSchemaUrl: schemaUrl,
+                tables: tables,
+                hasBron: true
+            });
+
+            console.log('✅ Bron sazlamalary güncellendi:', currentBronStoreId);
+            showNotification('Bron sazlamalary üstünlikli ýatda saklandy!');
+            bronSettingsModal.style.display = 'none';
+            // Yerel veriyi güncelle
+            await loadAllData();
+            await renderBronTable(); // Tabloyu anında güncelle
+
+        } catch (error) {
+            console.error('Bron sazlamalary ýatda saklanyp bilmedi:', error);
+            showNotification('Sazlamalar ýatda saklanyp bilmedi!', false);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+
+    cancelBronSettings?.addEventListener('click', () => {
+        bronSettingsModal.style.display = 'none';
+    });
+
+    // Bron tablosunu render et
+    window.renderBronTable = async () => {
+        if (!bronTableBody || !currentBronStoreId) {
+            console.log('⚠️ renderBronTable: bronTableBody veya currentBronStoreId eksik', { bronTableBody: !!bronTableBody, currentBronStoreId });
+            return;
+        }
+
+        try {
+            console.log('🔍 Bron tablosu (Masalar) güncelleniyor... Mağaza:', currentBronStoreId);
+            // Güncel mağaza verisini çek
+            const doc = await window.db.collection('stores').doc(currentBronStoreId).get({ source: 'server' });
+            if (!doc.exists) return;
+            const store = doc.data();
+
+            bronTableBody.innerHTML = '';
+
+            const tables = store.tables || [];
+            if (tables.length === 0) {
+                bronTableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">Bu magazyn üçin henüz stol goşulmady. <br> "Bron Sazlamalary" düwmesine basyp stol goşup bilersiňiz.</td></tr>';
+                return;
+            }
+
+            tables.forEach(table => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td data-label="Stol No">${table}</td>
+                    <td data-label="Status"><span class="status-badge confirmed">Aktiv</span></td>
+                    <td data-label="Sazlamalar">
+                        <button class="btn-icon edit-bron-settings" title="Sazlamalar"><i class="fas fa-cog"></i></button>
+                    </td>
+                `;
+                bronTableBody.appendChild(row);
+
+                row.querySelector('.edit-bron-settings')?.addEventListener('click', () => {
+                    openBronSettingsBtn.click();
+                });
+            });
+
+        } catch (error) {
+            console.error('Bron tablosu (Masalar) yüklenemedi:', error);
+        }
     };
 
     // --- MAĞAZA FONKSİYONLARI ---
@@ -244,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log(`✅ ${stores.length} mağaza tabloya eklendi`);
         renderReservationStores(); // Rezervasyon mağazalarını da güncelle
+        renderBronStores(); // ✅ YENİ: Bron mağazalarını da güncelle
     };
 
     // Rezervasyon mağazalarını seçeneğe ekle
@@ -337,6 +638,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasReservationCheckbox = document.getElementById('store-has-reservation');
         if (hasReservationCheckbox) {
             hasReservationCheckbox.checked = store.hasReservation || false;
+        }
+
+        // ✅ YENİ: Bron checkbox ve Şema yükle
+        const hasBronCheckbox = document.getElementById('store-has-bron');
+        if (hasBronCheckbox) {
+            hasBronCheckbox.checked = store.hasBron || false;
+        }
+
+        if (storeSchemaPreview) {
+            if (store.restaurantSchemaUrl) {
+                storeSchemaPreview.src = store.restaurantSchemaUrl;
+                storeSchemaPreview.classList.add('show');
+                if (storeSchemaUrl) storeSchemaUrl.value = store.restaurantSchemaUrl;
+            } else {
+                storeSchemaPreview.src = '';
+                storeSchemaPreview.classList.remove('show');
+                if (storeSchemaUrl) storeSchemaUrl.value = '';
+            }
         }
 
         storeModal.style.display = 'block';
@@ -855,7 +1174,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const phone = document.getElementById('store-phone')?.value.trim() || '';
         const location = document.getElementById('store-location')?.value.trim() || '';
         const orderPhone = document.getElementById('store-order-phone')?.value.trim() || '';
-        const hasReservation = document.getElementById('store-has-reservation')?.checked || false; // ✅ YENİ
+        const hasReservation = document.getElementById('store-has-reservation')?.checked || false;
+        const hasBron = document.getElementById('store-has-bron')?.checked || false; // ✅ YENİ
+        const schemaFile = storeSchemaImage?.files[0]; // ✅ YENİ
 
         if (!name) {
             showNotification('Mağaza ady gerekli!', false);
@@ -864,6 +1185,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            let restaurantSchemaUrl = storeSchemaUrl?.value || ''; // ✅ YENİ
+
+            if (schemaFile) {
+                // Şemayı R2'ye yükle
+                try {
+                    const uploadResult = await window.uploadToR2(schemaFile, name);
+                    restaurantSchemaUrl = uploadResult;
+                } catch (uploadError) {
+                    console.error('Schema upload error:', uploadError);
+                    showNotification('Şema yüklenemedi!', false);
+                    isSubmitting = false;
+                    return;
+                }
+            }
+
             if (editingStoreId) {
                 // ✅ Mağaza güncelleme
                 await window.db.collection('stores').doc(editingStoreId).update({
@@ -876,7 +1212,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     phone,
                     location,
                     orderPhone,
-                    hasReservation // ✅ YENİ
+                    hasReservation,
+                    hasBron, // ✅ YENİ
+                    restaurantSchemaUrl // ✅ YENİ
                 });
                 showNotification('Mağaza güncellendi!');
             } else {
@@ -891,7 +1229,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     phone,
                     location,
                     orderPhone,
-                    hasReservation // ✅ YENİ
+                    hasReservation,
+                    hasBron, // ✅ YENİ
+                    restaurantSchemaUrl // ✅ YENİ
                 });
                 showNotification('Mağaza eklendi!');
             }
@@ -913,8 +1253,6 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(err);
             showNotification('Mağaza işlemi başarısız!', false);
             isSubmitting = false;
-        } finally {
-            // isSubmitting handled above
         }
     };
 
@@ -1225,9 +1563,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderOrdersTable = async (cachedOrders, cachedProducts, cachedStores) => {
         try {
-            const orders = cachedOrders || (await window.db.collection('orders').orderBy('date', 'desc').get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const allProducts = cachedProducts || (await window.db.collection('products').get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const allStores = cachedStores || (await window.db.collection('stores').get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const orders = cachedOrders || (await window.db.collection('orders').orderBy('date', 'desc').get({ source: 'server' })).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const allProducts = cachedProducts || (await window.db.collection('products').get({ source: 'server' })).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const allStores = cachedStores || (await window.db.collection('stores').get({ source: 'server' })).docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             ordersTableBody.innerHTML = '';
             if (orders.length === 0) {
@@ -1240,7 +1578,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 let storeNames = '';
                 if (order.orderType === 'reservation' && order.storeId) {
                     const store = allStores.find(s => s.id === order.storeId);
-                    storeNames = store ? store.name : 'Bilinmiyor';
+                    storeNames = store ? `(Reservation) ${store.name}` : '(Reservation) Bilinmiyor';
+                } else if (order.orderType === 'bron' && order.storeId) {
+                    const store = allStores.find(s => s.id === order.storeId);
+                    storeNames = store ? `(Bron) ${store.name}` : '(Bron) Bilinmiyor';
                 } else {
                     storeNames = [...new Set(order.items.map(item => {
                         const product = allProducts.find(p => p.id === item.id);
@@ -2882,13 +3223,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Tüm mağazaları getir (Firestore)
     window.getStoresFromFirebase = async function () {
-        const snap = await window.db.collection('stores').get();
+        const snap = await window.db.collection('stores').get({ source: 'server' });
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     };
 
-    // Tüm ürünleri getir (Firestore)
+    // Tüm ürünleri getir (Firestore) - SUNUCUDAN ZORUNLU
     window.getProductsFromFirebase = async function () {
-        const snap = await window.db.collection('products').get();
+        const snap = await window.db.collection('products').get({ source: 'server' });
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     };
 
@@ -2903,11 +3244,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (loadingText) loadingText.textContent = 'Veriler yükleniyor...';
 
-            // ✅ TEK SEFERDE TÜM VERİLERİ ÇEK (Paralel)
+            // ✅ TEK SEFERDE TÜM VERİLERİ ÇEK (Paralel) - SUNUCUDAN ZORUNLU
             const [storesSnap, productsSnap, ordersSnap] = await Promise.all([
-                window.db.collection('stores').get(),
-                window.db.collection('products').get(),
-                window.db.collection('orders').orderBy('date', 'desc').get()
+                window.db.collection('stores').get({ source: 'server' }),
+                window.db.collection('products').get({ source: 'server' }),
+                window.db.collection('orders').orderBy('date', 'desc').get({ source: 'server' })
             ]);
 
             const stores = storesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -2930,7 +3271,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderParentCategoriesTable(),
                 renderSubcategoriesTable(),
                 populateStoreSelect(),
-                populateStoreFilter()
+                populateStoreFilter(),
+                renderBronTable() // ✅ Bron tablosunu da güncelle
             ]);
 
             console.log('✅ Tüm veriler başarıyla yüklendi');
@@ -3012,6 +3354,7 @@ function startAutoRefresh() {
             await renderStoresTable();
             await renderProductsTable();
             await renderOrdersTable();
+            await renderBronTable(); // ✅ Bron tablosunu da otomatik yenile
             updateDashboard(); // İstatistikleri güncelle
         } catch (error) {
             console.error('Otomatik yenileme sırasında hata oluştu:', error);
