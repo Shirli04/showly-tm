@@ -839,9 +839,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const storeViews = store.views || 0;
                 storeBanner.innerHTML = `
                     <div class="store-banner-content" style="position: relative;">
-                        <div class="store-views-badge">
-                            <i class="fas fa-eye"></i> <span>${storeViews}</span>
-                        </div>
+                        
                         <div class="store-info">
                             <h2 id="store-banner-name"></h2>
                             <p id="store-banner-text"></p>

@@ -3518,13 +3518,11 @@ select {
     position: sticky;
     top: 66px;
     z-index: 90;
-    background-color: #f5f5f5;
-    /* Beyaz yerine hafif gri ton */
+    background-color: transparent;
     padding: 10px 16px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     transition: top 0.3s ease;
     margin-bottom: 0;
-    /* Boşluk kalmaması için */
 }
 
 /* Mobilde logo ve arama çubuğu alt alta geçtiği için (flex-wrap) header yüksekliği artar */
