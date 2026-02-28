@@ -344,9 +344,11 @@ header {
 .container {
     display: flex;
     max-width: 1400px;
-    margin: 20px auto;
+    margin: 0 auto;
+    /* Boşluk giderildi */
     gap: 25px;
-    padding: 0 20px;
+    padding: 12px 20px 0;
+    /* Üst padding ile biraz nefes alan çerçeve */
     position: relative;
 }
 
@@ -3515,14 +3517,14 @@ select {
 .category-filters-section {
     position: sticky;
     top: 66px;
-    /* Header yüksekliğine tam oturacak şekilde düşürüldü */
     z-index: 90;
-    /* Header (100) altında, diğer ürünlerin üstünde durmalı */
-    background-color: var(--background-color, #fff);
+    background-color: #f5f5f5;
+    /* Beyaz yerine hafif gri ton */
     padding: 10px 16px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     transition: top 0.3s ease;
+    margin-bottom: 0;
+    /* Boşluk kalmaması için */
 }
 
 /* Mobilde logo ve arama çubuğu alt alta geçtiği için (flex-wrap) header yüksekliği artar */
