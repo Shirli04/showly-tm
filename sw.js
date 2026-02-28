@@ -38,13 +38,15 @@ self.addEventListener('activate', event => {
 
 // Fetch Event: Serve from cache if offline
 self.addEventListener('fetch', event => {
-    // Sadece GET isteklerini yakala ve Firebase WebChannel/Firestore veya Cloudflare Analytics (cdn-cgi) isteklerini yoksay
+    // Sadece GET isteklerini yakala ve asenkron hizmetleri yoksay (Firebase, Cloudflare, Resimler vb.)
     if (
         event.request.method !== 'GET' ||
         !event.request.url.startsWith('http') ||
         event.request.url.includes('firestore.googleapis.com') ||
         event.request.url.includes('google.com') ||
-        event.request.url.includes('cdn-cgi')
+        event.request.url.includes('cdn-cgi') ||
+        event.request.url.includes('cloudflareinsights.com') ||
+        event.request.url.includes('img.showlytm.store')
     ) {
         return;
     }

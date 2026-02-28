@@ -1947,22 +1947,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         const modalImage = document.getElementById('modal-image');
         const modalSkeleton = document.getElementById('modal-img-skeleton');
 
-        // ✅ Resmi ve skeleton'u sıfırla
-        if (modalImage) {
-            modalImage.classList.remove('loaded');
-            if (modalSkeleton) modalSkeleton.style.display = 'block';
+        // ✅ GÜNCELLENDİ: Tıklanan ürünün ekrandaki mevcut resim kaynağını bul (Yeniden yüklemeyi önle)
+        let preloadedImageUrl = product.imageUrl;
+        const existingImgEl = document.querySelector(`.product-card[onclick="openProductModal('${productId}')"] img.product-img`);
+        if (existingImgEl && existingImgEl.src) {
+            preloadedImageUrl = existingImgEl.src;
+        }
 
-            modalImage.onload = () => {
-                modalImage.classList.add('loaded');
-                if (modalSkeleton) modalSkeleton.style.display = 'none';
-            };
+        // ✅ Resmi ve skeleton'u ayarla
+        if (modalImage) {
+            // Anında eldeki en iyi kalite resmi bas, skeleton göstermeye gerek kalmasın
+            modalImage.src = preloadedImageUrl;
+            modalImage.classList.add('loaded');
+            if (modalSkeleton) modalSkeleton.style.display = 'none';
+
+            // Arka planda yüksek kaliteli (varsa) versiyonu yükle
+            const highResUrl = getOptimizedImageUrl(product.imageUrl, 800);
+            if (highResUrl !== preloadedImageUrl) {
+                const tempImg = new Image();
+                tempImg.onload = () => {
+                    modalImage.src = highResUrl;
+                };
+                tempImg.src = highResUrl;
+            }
+
             modalImage.onerror = () => {
-                modalImage.onerror = null; // Sonsuz döngüyü engelle
+                modalImage.onerror = null;
                 modalImage.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L2RleHQ+PC9zdmc+';
-                modalImage.classList.add('loaded');
-                if (modalSkeleton) modalSkeleton.style.display = 'none';
             };
-            modalImage.src = getOptimizedImageUrl(product.imageUrl, 800);
         }
 
         // ✅ GÜNCELLENDİ: Çok dilli modal başlık
