@@ -899,7 +899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return bScore - aScore;
             });
 
-            sortedProducts.forEach(product => {
+            sortedProducts.forEach((product, index) => {
                 const productCard = document.createElement('div');
                 productCard.className = 'product-card';
                 // ✅ Data attribute'lar filtre için
@@ -907,7 +907,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 productCard.setAttribute('data-category', product.category || '');
                 productCard.setAttribute('data-on-sale', product.isOnSale ? 'true' : 'false');
                 const priceVal = parseFloat((product.price || '0').replace(' TMT', '')) || 0;
-                productCard.setAttribute('data-price', priceVal);
+                productCard.setAttribute('data-product-price', priceVal);
 
                 let priceDisplayElement = null;
 
@@ -946,13 +946,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
+                // HIZ OPTİMİZASYONU: Kullanıcının ilk göreceği (ilk 6) resimde `lazy` kullanma, öncelikli indirilsin.
+                const lazyAttribute = index >= 6 ? 'loading="lazy"' : '';
+
                 // ✅ GÜNCELLENDİ: Çok dilli ürün kartı
                 const _lang = getSelectedLang();
                 productCard.innerHTML = `
                     <div class="product-image-container">
                         <div class="img-skeleton"></div>
                         ${product.isOnSale ? '<span class="discount-badge">' + translate('discount', _lang) + '</span>' : ''}
-                        <img class="product-img" loading="lazy">
+                        <img class="product-img" ${lazyAttribute}>
                         <button class="btn-favorite" data-id="${product.id}"><i class="far fa-heart"></i></button>
                     </div>
                     <div class="product-info">
@@ -1160,14 +1163,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        filteredProducts.forEach(product => {
+        filteredProducts.forEach((product, index) => {
             const productCard = document.createElement('div');
             productCard.className = 'product-card';
             productCard.setAttribute('data-product-id', product.id);
+
+            // İlk 6 arama sonucunu anında indir, sonrakileri beklet (Hız optimizasyonu)
+            const lazyAttribute = index >= 6 ? 'loading="lazy"' : '';
+
             productCard.innerHTML = `
                 <div class="product-image-container">
                     <div class="img-skeleton"></div>
-                    <img class="product-img" loading="lazy">
+                    <img class="product-img" ${lazyAttribute}>
                     <button class="btn-favorite" data-id="${product.id}"><i class="far fa-heart"></i></button>
                 </div>
                 <div class="product-info">
