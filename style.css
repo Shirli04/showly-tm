@@ -2757,9 +2757,17 @@ header {
 /* ================================ YENİ FİLTRE ALANI STİLİ ================================ */
 .category-buttons-container {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0;
+    flex-wrap: nowrap; /* 🔥 GÜNCELLENDİ: Sağa kaydırmalı olması için wrap iptal edildi */
+    gap: 8px;
     margin-bottom: 15px;
+    overflow-x: auto; /* Sağa kaydırmayı aç */
+    scrollbar-width: none; /* Firefox için barı gizle */
+    -ms-overflow-style: none; /* IE için barı gizle */
+    padding-bottom: 4px; /* Scroll için alt boşluk */
+}
+
+.category-buttons-container::-webkit-scrollbar {
+    display: none; /* Chrome/Safari için barı gizle */
 }
 
 .filter-toggle-btn {
@@ -3512,9 +3520,11 @@ select {
     display: flex;
     gap: 8px;
     overflow-x: auto;
+    flex-wrap: nowrap; /* Wrap iptal */
     padding-bottom: 4px;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch; /* iOS Safari akıcı kaydırma */
 }
 
 .category-buttons-container::-webkit-scrollbar {
