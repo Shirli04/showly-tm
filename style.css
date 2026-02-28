@@ -660,6 +660,10 @@ header {
 /* ================================ İÇERİK ALANI ================================ */
 .content {
     flex: 1;
+    min-width: 0;
+    /* ✅ Flexbox taşma (overflow) duzeltmesi - IE dışında evrensel destek */
+    overflow: hidden;
+    /* Yatay taşmayı engeller */
 }
 
 /* ================================ STORE BANNER ================================ */
@@ -670,6 +674,9 @@ header {
     margin-bottom: 25px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
     border-bottom: 3px solid var(--primary-color);
+    max-width: 100%;
+    /* Konteyner dışına taşmayı engeller */
+    box-sizing: border-box;
 }
 
 .store-banner-content {
@@ -3520,7 +3527,6 @@ select {
     z-index: 90;
     background-color: transparent;
     padding: 10px 16px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     transition: top 0.3s ease;
     margin-bottom: 0;
 }
