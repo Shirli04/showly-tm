@@ -277,7 +277,15 @@
                             </button>
                         </div>
                     </div>
-                    <!-- Excel butonları kaldırıldı -->
+                    <div class="export-buttons" style="margin-top: 15px;">
+                        <button class="btn-export" id="export-stores-btn">
+                            <i class="fas fa-download"></i> Excel al
+                        </button>
+                        <button class="btn-export" id="import-stores-btn" style="background-color: #17a2b8;">
+                            <i class="fas fa-upload"></i> Excel'den goş
+                        </button>
+                        <input type="file" id="import-stores-input" accept=".xlsx,.xls" style="display: none;">
+                    </div>
                     <div class="table-container">
                         <table class="admin-table">
                             <thead>

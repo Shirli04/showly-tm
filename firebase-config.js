@@ -26,7 +26,8 @@ if (typeof firebase !== 'undefined') {
                 cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
                 ignoreUndefinedProperties: true,
                 experimentalForceLongPolling: true,
-                useFetchStreams: false
+                useFetchStreams: false,
+                merge: true // ✅ SDK warningini gizler
             });
             window._firestoreConfigured = true;
             console.log('🚀 Firestore: Yapılandırma tamamlandı');

@@ -1,23 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Admin paneli yükleniyor...');
 
-    // ✅ LOADING EKRANINI BAŞLANGIÇTA GÖSTER
+    // ✅ LOADING EKRANI İPTAL EDİLDİ (SKELETON KULLANILACAK)
     const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingOverlay) {
-        loadingOverlay.style.display = 'flex';
-        const loadingText = loadingOverlay.querySelector('.loading-text');
-        if (loadingText) loadingText.textContent = 'Veriler yükleniyor...';
-    }
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
 
     // ✅ sessionStorage'dan kullanıcıyı al (localStorage değil!)
     const currentUser = JSON.parse(sessionStorage.getItem('adminUser'));
 
     // Eğer kullanıcı yoksa login'e yönlendir
     if (!currentUser) {
-        if (loadingOverlay) loadingOverlay.style.display = 'none';
         window.location.replace('/login.html');
         return; // Kodun devam etmesini engelle
     }
+
+    // ✅ YENİ: Admin SKELETON fonksiyonu
+    window.showTableSkeleton = (tableBodyId, columnsCount = 5, rowsCount = 4) => {
+        const tbody = document.getElementById(tableBodyId);
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        for (let i = 0; i < rowsCount; i++) {
+            const tr = document.createElement('tr');
+
+            let tds = '';
+            for (let j = 0; j < columnsCount; j++) {
+                tds += `<td><div style="width: 100%; height: 20px; background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeletonLoading 1.5s infinite; border-radius: 4px;"></div></td>`;
+            }
+
+            tr.innerHTML = tds;
+            tbody.appendChild(tr);
+        }
+    };
 
     console.log('✅ Giriş yapan kullanıcı:', currentUser.username);
 
@@ -117,6 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportProductsBtn = document.getElementById('export-products-btn');
     const importProductsBtn = document.getElementById('import-products-btn');
     const importProductsInput = document.getElementById('import-products-input');
+
+    const exportStoresBtn = document.getElementById('export-stores-btn');
+    const importStoresBtn = document.getElementById('import-stores-btn');
+    const importStoresInput = document.getElementById('import-stores-input');
 
     // Dosya yükleme
     const productImage = document.getElementById('product-image');
@@ -496,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mağaza tablosunu güncelle
     const renderStoresTable = async (cachedStores, cachedProducts) => {
+        window.showTableSkeleton('stores-table-body', 5, 5); // Skeleton göster
         const stores = cachedStores || await window.showlyDB.getStores();
         const allProducts = cachedProducts || (await window.db.collection('products').get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -1251,6 +1270,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Ürün tablosunu güncelle
     async function renderProductsTable(cachedProducts, cachedStores) {
+        window.showTableSkeleton('products-table-body', 6, 6); // Skeleton göster
         try {
             // ✅ Verileri önbellekten veya Firebase'den al
             let products = cachedProducts;
@@ -1555,6 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     const renderOrdersTable = async (cachedOrders, cachedProducts, cachedStores) => {
+        window.showTableSkeleton('orders-table-body', 9, 5); // Skeleton göster
         try {
             const orders = cachedOrders || (await window.db.collection('orders').orderBy('date', 'desc').get({ source: 'server' })).docs.map(doc => ({ id: doc.id, ...doc.data() }));
             const allProducts = cachedProducts || (await window.db.collection('products').get({ source: 'server' })).docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1710,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-    // --- EXCEL FONKSİYONLARI (Ürünler İçin Geri Getirildi) ---
+    // --- EXCEL FONKSİYONLARI ---
     // Ürünleri Excel'e indir
     if (exportProductsBtn) {
         exportProductsBtn.addEventListener('click', () => {
@@ -1736,13 +1757,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderProductsTable();
                     updateDashboard();
                 } catch (error) {
-                    showNotification('Hata: ' + error.error, false);
+                    showNotification('Hata: ' + (error.error || error.message), false);
                 }
             }
         });
     }
 
-    // --- MAĞAZA EXCEL FONKSİYONLARI KALDIRILDI ---
+    // Mağazaları Excel'e indir
+    if (exportStoresBtn) {
+        exportStoresBtn.addEventListener('click', () => {
+            ExcelManager.exportStoresToExcel();
+            showNotification('Mağazalar indirildi!');
+        });
+    }
+
+    // Excel'den mağaza yükle
+    if (importStoresBtn) {
+        importStoresBtn.addEventListener('click', () => {
+            importStoresInput.click();
+        });
+    }
+
+    if (importStoresInput) {
+        importStoresInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    const result = await ExcelManager.importStoresFromExcel(file);
+                    showNotification(result.message);
+                    renderStoresTable();
+                    updateDashboard();
+                } catch (error) {
+                    showNotification('Hata: ' + (error.error || error.message), false);
+                }
+            }
+        });
+    }
 
     // Mağaza seçimini doldur
     async function populateStoreSelect() {
@@ -2290,6 +2340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Kullanıcıları listele
         const renderUsersTable = async () => {
+            window.showTableSkeleton('users-table-body', 4, 3); // Skeleton göster
             try {
                 const usersSnapshot = await window.db.collection('users').get();
                 const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -2573,6 +2624,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Kullanıcıları listele
     const renderUsersTable = async () => {
+        window.showTableSkeleton('users-table-body', 4, 3); // Skeleton göster
         if (!usersTableBody) return;
 
         try {
@@ -3229,58 +3281,115 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sayfa yüklendiğinde bekleyen siparişleri kontrol et
     processPendingOrders();
 
-    // ✅ Tüm verileri yükleyen fonksiyon (loading ile)
+    // ✅ Tüm verileri yükleyen fonksiyon - Optimize Edilmiş (Anında Açılır)
     const loadAllData = async () => {
         const loadingOverlay = document.getElementById('loading-overlay');
-        const loadingText = loadingOverlay?.querySelector('.loading-text');
 
         try {
-            if (loadingText) loadingText.textContent = 'Veriler yükleniyor...';
+            console.log('Tüm veriler Firebase\'den yükleniyor (admin)...');
+            window.showTableSkeleton('stores-table-body', 5, 5);
+            window.showTableSkeleton('products-table-body', 6, 6);
+            window.showTableSkeleton('orders-table-body', 9, 5);
 
-            // ✅ TEK SEFERDE TÜM VERİLERİ ÇEK (Paralel) - SUNUCUDAN ZORUNLU
-            const [storesSnap, productsSnap, ordersSnap] = await Promise.all([
-                window.db.collection('stores').get({ source: 'server' }),
-                window.db.collection('products').get({ source: 'server' }),
-                window.db.collection('orders').orderBy('date', 'desc').get({ source: 'server' })
-            ]);
+            const fetchFirebase = async () => {
+                const [storesSnap, productsSnap, ordersSnap] = await Promise.all([
+                    window.db.collection('stores').get().catch(e => { console.error('Stores error:', e); return { docs: [] }; }),
+                    window.db.collection('products').get().catch(e => { console.error('Products error:', e); return { docs: [] }; }),
+                    window.db.collection('orders').orderBy('date', 'desc').get().catch(e => { console.error('Orders error:', e); return { docs: [] }; })
+                ]);
 
-            const stores = storesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const products = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                return {
+                    stores: storesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                    products: productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                    orders: ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                    source: 'Firebase'
+                };
+            };
 
-            // ✅ Global değişkenlere ata
+            const fetchWorker = async () => {
+                const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                try {
+                    const response = await fetch(WORKER_URL, {
+                        method: 'GET', mode: 'cors', cache: 'no-cache', signal: controller.signal
+                    });
+                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                    const data = await response.json();
+                    if (!data || !data.stores) throw new Error('Geçersiz Worker verisi');
+
+                    // Worker'da orders yoksa Firebase'den beklemek zorunda kalabilir, o yüzden Worker'ı sadece stores ve products için kullanıp orders'ı Firebase'den ekleyelim
+                    const ordersSnap = await window.db.collection('orders').orderBy('date', 'desc').get().catch(() => ({ docs: [] }));
+
+                    return {
+                        stores: data.stores || [],
+                        products: data.allProducts || [], // Varsayım: Worker'ın products döndürdüğüne emin olmalıyız, yoksa Firebase kazanır
+                        orders: ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                        source: 'Worker'
+                    };
+                } finally {
+                    clearTimeout(timeoutId);
+                }
+            };
+
+            // Yarış başlasın! (Hangi sunucu daha hızlıysa)
+            const result = await Promise.any([
+                fetchFirebase(),
+                fetchWorker()
+            ]).catch(fetchFirebase); // İkisi de patlarsa son çare Firebase'i bekle
+
+            console.log(`✅ Admin verileri yüklendi (KAYNAK: ${result.source})`);
+
+            const stores = result.stores;
+            const products = result.products;
+            const orders = result.orders;
+
             globalStores = stores;
             globalProducts = products;
             globalOrders = orders;
 
-            // ✅ TABLOLARI ÖNBELLEKTEKİ VERİYLE DOLDUR
-            await Promise.all([
-                loadCategories(),
-                updateDashboard(stores, products, orders),
-                renderStoresTable(stores, products),
-                renderProductsTable(products, stores),
-                renderOrdersTable(orders, products, stores),
-                renderUsersTable(),
-                renderParentCategoriesTable(),
-                renderSubcategoriesTable(),
-                populateStoreSelect(),
-                populateStoreFilter(),
-                renderBronTable() // ✅ Bron tablosunu da güncelle
-            ]);
+            updateDashboard(globalStores, globalProducts, globalOrders);
 
-            console.log('✅ Tüm veriler başarıyla yüklendi');
+            // Sadece admin menüleri açıksa o tabloları çiz
+            const activeSection = document.querySelector('.content-section.active');
+            if (activeSection) {
+                const sectionId = activeSection.id;
+                if (sectionId === 'stores') renderStoresTable(globalStores, globalProducts);
+                if (sectionId === 'products') renderProductsTable(globalProducts, globalStores);
+                if (sectionId === 'orders') renderOrdersTable(globalOrders, globalProducts, globalStores);
+                if (sectionId === 'users' && currentUser.role === 'superadmin') renderUsersTable();
+                if (sectionId === 'categories') {
+                    renderParentCategoriesTable();
+                    renderSubcategoriesTable();
+                }
+            } else {
+                renderStoresTable(globalStores, globalProducts);
+            }
 
-            // ✅ Otomatik yenilemeyi başlat
+            // Gerekli dropdownları doldur
+            populateStoreSelect(); // Assuming populateStoreSelect is the correct function name
+            populateStoreFilter();
+            renderReservationStores(); // Rezervasyon dropdown doldur (zaten allStores filter yapıyor)
+            renderBronStores(); // Bron dropdown doldur
+
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
+
+            // Otomatik yenilemeyi başlat
             startAutoRefresh();
-            console.log('✅ Otomatik yenileme aktif');
+            console.log('✅ Tüm veriler yüklendi.');
 
         } catch (error) {
             console.error('❌ Veriler yüklenemedi:', error);
-            showNotification('Veriler yüklenemedi! Sayfayı yenileyin.', false);
-        } finally {
-            if (loadingOverlay) {
-                loadingOverlay.style.display = 'none'; // Yükleniyor ekranını gizle
-            }
+            const isConnError = error.message && (
+                error.message.includes('reach Cloud Firestore') ||
+                error.message.includes('unavailable') ||
+                error.message.includes('network')
+            );
+
+            showNotification(
+                isConnError ? 'İnternet bağlantısı hatası! VPN kullanıyor musunuz?' : 'Veriler yüklenemedi! Sayfayı yenileyin.',
+                false
+            );
         }
     };
 

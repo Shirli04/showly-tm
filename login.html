@@ -165,10 +165,18 @@
             submitBtn.style.opacity = '0.7';
 
             try {
+                // ✅ YENİ: Zaman aşımı (Timeout) mekanizması
+                const loginTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('TIMEOUT')), 15000)
+                );
+
                 // Sadece username ile arama yap (Password'e göre arama yapmak güvenli değil ve hashing ile çalışmaz)
-                const usersSnapshot = await window.db.collection('users')
+                const fetchUser = window.db.collection('users')
                     .where('username', '==', username)
                     .get();
+
+                // ✅ Yarış: Hangisi önce biterse (Sorgu mu, Timeout mu?)
+                const usersSnapshot = await Promise.race([fetchUser, loginTimeout]);
 
                 let isValid = false;
                 let userData = null;

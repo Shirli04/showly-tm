@@ -25,7 +25,7 @@ class ExcelManager {
         }
     }
 
-    // ✅ GÜNCELLENDİ: Ürünleri Excel'e dönüştür ve indir (çok dilli destek)
+    // ✅ GÜNCELLENDİ: Ürünleri Excel'e dönüştür ve indir (çok dilli destek + ID desteği)
     static async exportProductsToExcel() {
         try {
             const productsSnapshot = await window.db.collection('products').get();
@@ -37,21 +37,29 @@ class ExcelManager {
             const excelData = products.map(product => {
                 const store = stores.find(s => s.id === product.storeId);
                 return {
+                    'Haryt ID': product.id,
+                    'Magazyn ID': product.storeId || '',
                     'Magazyn Ady': store ? store.name : 'Bilinmiyor',
-                    'Haryt Ady': product.title || '',
-                    // Çok dilli ürün adı (TM = Haryt Ady, sadece RU ve EN eklenir)
-                    'name_ru': product.name_ru || '',
-                    'name_en': product.name_en || '',
-                    'Düşündiriş': product.description || '',
-                    // Çok dilli açıklama (TM = Düşündiriş, sadece RU ve EN eklenir)
-                    'desc_ru': product.desc_ru || '',
-                    'desc_en': product.desc_en || '',
-                    'Baha': product.price ? product.price.replace(' TMT', '') : '',
-                    'Arzanladyş Bahasy': product.originalPrice ? product.originalPrice.replace(' TMT', '') : '',
-                    'Kategoriýa': product.category || '',
-                    // ✅ YENİ: Çok dilli kategori (TM = Kategoriýa, sadece RU ve EN)
-                    'category_ru': product.category_ru || '',
-                    'category_en': product.category_en || '',
+                    // Türkmençe (TM)
+                    'Haryt Ady (TM)': product.title || '',
+                    // Rusça (RU)
+                    'Haryt Ady (RU)': product.name_ru || '',
+                    // İňlisçe (EN)
+                    'Haryt Ady (EN)': product.name_en || '',
+                    // Türkmençe (TM) Düşündiriş
+                    'Düşündiriş (TM)': product.description || '',
+                    // Rusça (RU) Açıklama
+                    'Düşündiriş (RU)': product.desc_ru || '',
+                    // İňlisçe (EN) Açıklama
+                    'Düşündiriş (EN)': product.desc_en || '',
+                    // Bahalar
+                    'Baha': product.price ? String(product.price).replace(' TMT', '').trim() : '0',
+                    'Arzanladyş Bahasy': product.originalPrice ? String(product.originalPrice).replace(' TMT', '').trim() : '',
+                    // Kategoriýalar
+                    'Kategoriýa (TM)': product.category || '',
+                    'Kategoriýa (RU)': product.category_ru || '',
+                    'Kategoriýa (EN)': product.category_en || '',
+                    // Beýlekiler
                     'Material': product.material || '',
                     'Surat URL': product.imageUrl || ''
                 };
@@ -85,6 +93,7 @@ class ExcelManager {
                     for (const row of jsonData) {
                         try {
                             const storeName = (row['Magazyn Ady'] || row['Mağaza Adı'] || '').trim();
+                            const storeId = row['Magazyn ID'] || row['Store ID'];
 
                             if (!storeName) {
                                 console.warn('Boş mağaza adı atlandı');
@@ -92,14 +101,20 @@ class ExcelManager {
                             }
 
                             const slug = storeName.toLowerCase().replace(/[^a-z0-9çğıöşü]+/g, '-').replace(/^-+|-+$/g, '');
-
-                            await window.db.collection('stores').add({
+                            const storeData = {
                                 name: storeName,
                                 slug: slug,
                                 description: row['Düşündiriş'] || row['Açıklama'] || '',
                                 customBannerText: row['Banner Teksti'] || row['Banner Metni'] || '',
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            };
+
+                            if (storeId) {
+                                await window.db.collection('stores').doc(storeId).set(storeData, { merge: true });
+                            } else {
+                                storeData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                                await window.db.collection('stores').add(storeData);
+                            }
 
                             successCount++;
                         } catch (err) {
@@ -181,7 +196,7 @@ class ExcelManager {
                             }
 
                             // ✅ Ürün adını al (çok dilli destekli)
-                            const title = (row['name_tm'] || row['Haryt Ady'] || row['Ürün Adı'] || row['Urun Adi'] || '').trim();
+                            const title = (row['Haryt Ady (TM)'] || row['Haryt Ady'] || row['name_tm'] || row['Ürün Adı'] || row['Urun Adi'] || '').trim();
                             if (!title) {
                                 errorCount++;
                                 errors.push(`Satır ${i + 1}: Ürün adı boş`);
@@ -219,27 +234,33 @@ class ExcelManager {
                                 storeId: store.id,
                                 // Geriye uyumluluk: title ve description korunuyor
                                 title: title,
-                                description: (row['Düşündiriş'] || row['Açıklama'] || row['Aciklama'] || '').trim(),
+                                description: (row['Düşündiriş (TM)'] || row['Düşündiriş'] || row['desc_tm'] || row['Açıklama'] || row['Aciklama'] || '').trim(),
                                 // Çok dilli ürün adları (TM = title, sadece RU ve EN)
-                                name_ru: (row['name_ru'] || '').trim(),
-                                name_en: (row['name_en'] || '').trim(),
+                                name_ru: (row['Haryt Ady (RU)'] || row['name_ru'] || '').trim(),
+                                name_en: (row['Haryt Ady (EN)'] || row['name_en'] || '').trim(),
                                 // Çok dilli açıklamalar (TM = description, sadece RU ve EN)
-                                desc_ru: (row['desc_ru'] || '').trim(),
-                                desc_en: (row['desc_en'] || '').trim(),
+                                desc_ru: (row['Düşündiriş (RU)'] || row['desc_ru'] || '').trim(),
+                                desc_en: (row['Düşündiriş (EN)'] || row['desc_en'] || '').trim(),
                                 // Mevcut alanlar aynen korunuyor
                                 price: price,
                                 originalPrice: originalPrice,
                                 isOnSale: isOnSale,
-                                category: String(row['Kategoriýa'] || row['Kategori'] || '').trim(),
+                                category: String(row['Kategoriýa (TM)'] || row['Kategoriýa'] || row['category_tm'] || row['Kategori'] || '').trim(),
                                 // ✅ YENİ: Çok dilli kategori (TM = category, sadece RU ve EN)
-                                category_ru: String(row['category_ru'] || '').trim(),
-                                category_en: String(row['category_en'] || '').trim(),
+                                category_ru: String(row['Kategoriýa (RU)'] || row['category_ru'] || '').trim(),
+                                category_en: String(row['Kategoriýa (EN)'] || row['category_en'] || '').trim(),
                                 material: String(row['Material'] || row['Malzeme'] || '').trim(),
                                 imageUrl: imageUrl,
-                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                             };
 
-                            preparedProducts.push({ index: i, data: productData });
+                            // Eğer yeni ürünse createdAt ekle
+                            const productId = row['Haryt ID'] || row['Product ID'];
+                            if (!productId) {
+                                productData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+                            }
+
+                            preparedProducts.push({ index: i, id: productId, data: productData });
 
                         } catch (err) {
                             errorCount++;
@@ -267,8 +288,15 @@ class ExcelManager {
                             const batch = window.db.batch();
 
                             batchItems.forEach(item => {
-                                const docRef = window.db.collection('products').doc();
-                                batch.set(docRef, item.data);
+                                if (item.id) {
+                                    // Güncelleme
+                                    const docRef = window.db.collection('products').doc(item.id);
+                                    batch.set(docRef, item.data, { merge: true });
+                                } else {
+                                    // Yeni ekleme
+                                    const docRef = window.db.collection('products').doc();
+                                    batch.set(docRef, item.data);
+                                }
                             });
 
                             try {
@@ -280,7 +308,11 @@ class ExcelManager {
                                 // Batch başarısız olduysa tek tek dene
                                 for (const item of batchItems) {
                                     try {
-                                        await window.db.collection('products').add(item.data);
+                                        if (item.id) {
+                                            await window.db.collection('products').doc(item.id).set(item.data, { merge: true });
+                                        } else {
+                                            await window.db.collection('products').add(item.data);
+                                        }
                                         successCount++;
                                     } catch (singleErr) {
                                         errorCount++;
@@ -296,9 +328,13 @@ class ExcelManager {
                             loadingText.textContent = `Ürün yükleniyor... (${i + 1}/${preparedProducts.length})`;
 
                             try {
-                                await window.db.collection('products').add(item.data);
+                                if (item.id) {
+                                    await window.db.collection('products').doc(item.id).set(item.data, { merge: true });
+                                } else {
+                                    await window.db.collection('products').add(item.data);
+                                }
                                 successCount++;
-                                console.log(`✅ Ürün ${item.index + 1}:`, item.data);
+                                console.log(`✅ Ürün ${item.index + 1} (${item.id ? 'Güncellendi' : 'Eklendi'}):`, item.data);
                             } catch (err) {
                                 errorCount++;
                                 errors.push(`Satır ${item.index + 1}: ${err.message}`);

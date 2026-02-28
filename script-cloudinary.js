@@ -32,9 +32,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     var reservationBtn = document.getElementById('rezervasyon-yap-btn');
     var bronBtn = document.getElementById('bron-yap-btn');
 
-    // --- DURUM DEĞİŞKENLERİ (STATE) ---
-    var cart = JSON.parse(localStorage.getItem('showlyCart')) || {};
-    var favorites = JSON.parse(localStorage.getItem('showlyFavorites')) || [];
+    // --- DURUM DEĞİŞKENLERİ (STATE) & SAFESTORAGE ---
+    const SafeStorage = {
+        _memoryObj: {},
+        getItem: function (key) {
+            try { return localStorage.getItem(key) || this._memoryObj[key]; }
+            catch (e) { return this._memoryObj[key] || null; }
+        },
+        setItem: function (key, value) {
+            try { localStorage.setItem(key, value); }
+            catch (e) { this._memoryObj[key] = value; }
+        },
+        removeItem: function (key) {
+            try { localStorage.removeItem(key); }
+            catch (e) { delete this._memoryObj[key]; }
+        }
+    };
+
+    var cart = {};
+    var favorites = [];
+    try { cart = JSON.parse(SafeStorage.getItem('showlyCart')) || {}; } catch (e) { cart = {}; }
+    try { favorites = JSON.parse(SafeStorage.getItem('showlyFavorites')) || []; } catch (e) { favorites = []; }
+
     var currentStoreId = null;
     var allStores = [];
     var allProducts = [];
@@ -72,20 +91,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // ✅ PERFORMANS: Direkt mağaza erişiminde loading göster, ana sayfada gizle
+    // ✅ PERFORMANS: Direkt mağaza erişiminde skeleton göster, ana sayfada home elemanlarını koru.
     const currentPath = window.location.pathname.replace('/', '');
     const isDirectStoreAccess = currentPath && currentPath !== '';
 
+    if (loadingOverlay) loadingOverlay.style.display = 'none'; // Artık loading overlay'i varsayılan olarak kapalı tutuyoruz
+
     if (isDirectStoreAccess) {
-        // Direkt mağaza: loading göster, home elemanlarını gizle
-        if (loadingOverlay) loadingOverlay.style.display = 'flex';
+        // Direkt mağaza: skeleton göster, home elemanlarını gizle
         const heroEl = document.querySelector('.hero-section');
         const infoEl = document.querySelector('.info-section');
         if (heroEl) heroEl.style.display = 'none';
         if (infoEl) infoEl.style.display = 'none';
-    } else {
-        // Ana sayfa: loading gizle
-        if (loadingOverlay) loadingOverlay.style.display = 'none';
+
+        showStoreSkeleton(); // ✅ Eski overlay yerine profesyonel skeleton yapısını çağır
     }
 
     // ✅ PERFORMANS: Önbellek yardımcı fonksiyonları
@@ -94,141 +113,193 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function getCachedData() {
         try {
-            const cached = localStorage.getItem(CACHE_KEY);
+            const cached = SafeStorage.getItem(CACHE_KEY);
             if (!cached) return null;
 
             const { data, timestamp } = JSON.parse(cached);
             const now = Date.now();
 
             if (now - timestamp > CACHE_DURATION) {
-                localStorage.removeItem(CACHE_KEY);
+                SafeStorage.removeItem(CACHE_KEY);
                 return null;
             }
 
-            console.log('✅ Önbellekten veri yüklendi');
+            console.log('✅ Önbellekten veri yüklendi (SafeStorage)');
             return data;
         } catch (e) {
-            console.warn('Önbellek okuma hatası:', e);
+            console.warn('Önbellek okuma hatası, baypas ediliyor.', e);
             return null;
         }
     }
 
     function setCachedData(data) {
         try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify({
+            SafeStorage.setItem(CACHE_KEY, JSON.stringify({
                 data,
                 timestamp: Date.now()
             }));
         } catch (e) {
-            console.warn('Önbellek yazma hatası:', e);
+            console.warn('Önbellek yazma hatası, baypas ediliyor.', e);
         }
     }
 
-    // --- INDEXEDDB YARDIMCI SİSTEMİ (Ürün Önbelleği İçin) ---
+    // --- INDEXEDDB YARDIMCI SİSTEMİ (Hatasızlaştırılmış Versiyon) ---
     const IDB_CONFIG = { name: 'ShowlyProductsDB', store: 'products', version: 1 };
 
     const showlyIDB = {
         _db: null,
         async init() {
             if (this._db) return this._db;
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(IDB_CONFIG.name, IDB_CONFIG.version);
-                request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(IDB_CONFIG.store)) {
-                        db.createObjectStore(IDB_CONFIG.store, { keyPath: 'id' });
-                    }
-                };
-                request.onsuccess = (e) => {
-                    this._db = e.target.result;
-                    resolve(this._db);
-                };
-                request.onerror = (e) => reject(e.target.error);
+            return new Promise((resolve) => {
+                try {
+                    const request = indexedDB.open(IDB_CONFIG.name, IDB_CONFIG.version);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(IDB_CONFIG.store)) {
+                            db.createObjectStore(IDB_CONFIG.store, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = (e) => {
+                        this._db = e.target.result;
+                        resolve(this._db);
+                    };
+                    request.onerror = (e) => {
+                        console.warn('IDB başlatılamadı:', e);
+                        resolve(null);
+                    };
+                } catch (err) {
+                    console.warn('IDB exception:', err);
+                    resolve(null);
+                }
             });
         },
         async saveProducts(products) {
             const db = await this.init();
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(IDB_CONFIG.store, 'readwrite');
-                const store = transaction.objectStore(IDB_CONFIG.store);
-                products.forEach(p => store.put(p));
-                transaction.oncomplete = () => resolve();
-                transaction.onerror = (e) => reject(e.target.error);
+            if (!db) return;
+            return new Promise((resolve) => {
+                try {
+                    const transaction = db.transaction(IDB_CONFIG.store, 'readwrite');
+                    const store = transaction.objectStore(IDB_CONFIG.store);
+                    products.forEach(p => store.put(p));
+                    transaction.oncomplete = () => resolve();
+                    transaction.onerror = (e) => resolve(); // Sessizce yut
+                } catch (err) {
+                    resolve();
+                }
             });
         },
         async getProductsStore(storeId) {
             const db = await this.init();
-            return new Promise((resolve, reject) => {
-                const transaction = db.transaction(IDB_CONFIG.store, 'readonly');
-                const store = transaction.objectStore(IDB_CONFIG.store);
-                const request = store.getAll();
-                request.onsuccess = () => {
-                    const allP = request.result || [];
-                    resolve(allP.filter(p => p.storeId === storeId));
-                };
-                request.onerror = (e) => reject(e.target.error);
+            if (!db) return [];
+            return new Promise((resolve) => {
+                try {
+                    const transaction = db.transaction(IDB_CONFIG.store, 'readonly');
+                    const store = transaction.objectStore(IDB_CONFIG.store);
+                    const request = store.getAll();
+                    request.onsuccess = () => {
+                        const allP = request.result || [];
+                        resolve(allP.filter(p => p.storeId === storeId));
+                    };
+                    request.onerror = (e) => resolve([]);
+                } catch (err) {
+                    resolve([]);
+                }
+            });
+        },
+        async searchAllProducts() {
+            const db = await this.init();
+            if (!db) return [];
+            return new Promise((resolve) => {
+                try {
+                    const transaction = db.transaction(IDB_CONFIG.store, 'readonly');
+                    const store = transaction.objectStore(IDB_CONFIG.store);
+                    const req = store.getAll();
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = () => resolve([]);
+                } catch (err) {
+                    resolve([]);
+                }
             });
         }
     };
 
     // Veri yükleme akışını en sona taşıdık (hoisting sorunlarını önlemek için)
 
-    // ✅ Veri çekme ve önbellekleme fonksiyonu
+    // ✅ Veri çekme ve önbellekleme (Üç Katmanlı Mimari / Triple-Tier Promise Race)
     async function fetchAndCacheData(onlyStores = false) {
-        try {
-            console.log('🔄 Firebase üzerinden temel veriler yükleniyor...');
+        console.log('🔄 Temel veriler Firebase ve Worker yarışması (Race) ile yükleniyor...');
+
+        const fetchFirebase = async () => {
+            if (!window.db) throw new Error('Firebase DB bulunamadı');
             const [storesSnap, parentCatsSnap, subCatsSnap, catsSnap] = await Promise.all([
                 window.db.collection('stores').get(),
                 window.db.collection('parentCategories').get(),
                 window.db.collection('subcategories').get(),
                 window.db.collection('categories').get()
             ]);
+            return {
+                stores: storesSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+                parentCategories: parentCatsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+                subcategories: subCatsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+                categories: catsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+                source: 'Firebase'
+            };
+        };
 
-            allStores = storesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            window.allParentCategories = parentCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            window.allSubcategories = subCatsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            window.allOldCategories = catsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const fetchWorker = async () => {
+            const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
+            // AbortController ile 8 saniyede Worker timeout verilebilir ama Promise.any halledecektir
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            try {
+                const response = await fetch(WORKER_URL, {
+                    method: 'GET', mode: 'cors', cache: 'no-cache', signal: controller.signal
+                });
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                const data = await response.json();
+                if (!data || !data.stores) throw new Error('Geçersiz Worker verisi');
+                return {
+                    stores: data.stores || [],
+                    parentCategories: data.parentCategories || [],
+                    subcategories: data.subcategories || [],
+                    categories: data.categories || [],
+                    source: 'Worker'
+                };
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        };
 
+        try {
+            // Hangi sunucu daha hızlıysa, sistem onu kabul eder ve yola devam eder
+            const result = await Promise.any([
+                fetchFirebase().catch(e => { console.warn('Firebase yarıştan çekildi:', e); throw e; }),
+                fetchWorker().catch(e => { console.warn('Worker yarıştan çekildi:', e); throw e; })
+            ]);
+
+            allStores = result.stores;
+            window.allParentCategories = result.parentCategories;
+            window.allSubcategories = result.subcategories;
+            window.allOldCategories = result.categories;
             window.isInitialLoadComplete = true; // ✅ Temel yükleme bitti
-            console.log(`✅ ${allStores.length} mağaza ve temel veriler yüklendi (Firebase)`);
 
-            setCachedData({
-                stores: allStores,
-                parentCategories: window.allParentCategories,
-                subcategories: window.allSubcategories,
-                categories: window.allOldCategories
-            });
+            console.log(`✅ ${allStores.length} mağaza yüklendi (KAYNAK: ${result.source})`);
+
+            if (allStores.length > 0) {
+                setCachedData({
+                    stores: allStores,
+                    parentCategories: window.allParentCategories,
+                    subcategories: window.allSubcategories,
+                    categories: window.allOldCategories
+                });
+            }
 
             if (currentStoreId) renderStorePage(currentStoreId);
             return true;
 
-        } catch (error) {
-            console.warn('⚠️ Firebase hatası, Worker yedeğine geçiliyor...', error);
-
-            try {
-                const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-                const response = await fetch(WORKER_URL, {
-                    method: 'GET',
-                    mode: 'cors',
-                    cache: 'no-cache'
-                });
-                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-
-                const data = await response.json();
-                if (!data || !data.stores) throw new Error('Geçersiz Worker verisi');
-
-                allStores = data.stores;
-                window.allParentCategories = data.parentCategories || [];
-                window.allSubcategories = data.subcategories || [];
-                window.allOldCategories = data.categories || [];
-                window.isInitialLoadComplete = true;
-
-                console.log(`✅ Veriler Worker yedeğinden yüklendi.`);
-                return true;
-            } catch (workerError) {
-                console.error('❌ KRİTİK: Hem Firebase hem Worker başarısız!', workerError);
-                return false;
-            }
+        } catch (masterError) {
+            console.error('❌ KRİTİK HATA: Hiçbir uzak sunucudan veri çekilemedi!', masterError);
+            return false;
         }
     }
 
@@ -287,7 +358,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             storeBanner.style.display = 'block';
             storeBanner.innerHTML = `
                 <div class="store-banner-content">
-                    <div class="skeleton-banner"></div>
+                    <div class="skeleton-banner" style="width:100%; height:200px; border-radius:15px; margin-bottom:20px;"></div>
                 </div>
             `;
         }
@@ -510,91 +581,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // --- KATEGORİ FİLTRELERİNİ OLUŞTURAN FONKSİYON ---
+    // --- KATEGORİ FİLTRELERİNİ OLUŞTURAN FONKSİYON (Yatay Sticky Bar) ---
     const renderCategories = (storeId, activeFilter) => {
         const lang = getSelectedLang();
+        const section = document.getElementById('category-filters-section');
         const container = document.getElementById('category-buttons-container');
-        if (container) container.style.display = 'block'; // Force show
+        if (!container) return;
 
         const storeProducts = allProducts.filter(p => p.storeId === storeId);
-        console.log(`Dropdown Debug: StoreID=${storeId}, Products=${storeProducts.length}`);
-        // ✅ GÜNCELLENDİ: Kategorileri seçili dile göre grupla
-        const categories = [...new Set(storeProducts.map(p => getProductField(p, 'category', lang)).filter(Boolean))];
 
-        const representative = activeFilter?.type === 'CATEGORY' ? storeProducts.find(p => p.category === activeFilter.value) : null;
-        const activeCategoryName = representative ? getProductField(representative, 'category', lang) : (activeFilter?.type === 'CATEGORY' ? activeFilter.value : translate('filter_all', lang));
+        // Benzersiz kategorileri orijinal adlarına (category_tm) göre topla
+        const categoriesMap = new Map();
+        storeProducts.forEach(p => {
+            const baseCat = p.category;
+            if (baseCat && !categoriesMap.has(baseCat)) {
+                // Ekranda gösterilecek dili belirle
+                const displayCat = getProductField(p, 'category', lang) || baseCat;
+                categoriesMap.set(baseCat, displayCat);
+            }
+        });
 
+        // Temizle
         while (container.firstChild) container.removeChild(container.firstChild);
 
-        // Dropdown butonu
-        const dropdownBtn = document.createElement('button');
-        dropdownBtn.className = 'category-dropdown-btn';
-        dropdownBtn.innerHTML = `
-            <span class="category-dropdown-text">${activeCategoryName}</span>
-            <span class="category-dropdown-icon">▼</span>
-        `;
+        // Kategori yoksa bölümü gizle
+        if (categoriesMap.size === 0) {
+            if (section) section.style.display = 'none';
+            return;
+        }
 
-        // Dropdown içerik
-        const dropdownContent = document.createElement('div');
-        dropdownContent.className = 'category-dropdown-content';
-        dropdownContent.style.display = 'none';
+        if (section) section.style.display = 'block';
 
-        // "Tüm ürünler" seçeneği
-        const allOption = document.createElement('button');
-        allOption.className = 'category-dropdown-item ' + (!activeFilter ? 'active' : '');
-        allOption.textContent = translate('filter_all', lang) + ' ';
-        const allOptionCount = document.createElement('span');
-        allOptionCount.className = 'category-count';
-        allOptionCount.textContent = storeProducts.length;
-        allOption.appendChild(allOptionCount);
-        allOption.addEventListener('click', () => {
-            renderStorePage(storeId, null);
-            dropdownContent.style.display = 'none';
-        });
-        dropdownContent.appendChild(allOption);
+        // "Hepsi" butonu
+        const allBtn = document.createElement('button');
+        allBtn.className = 'category-chip' + (!activeFilter || activeFilter?.type !== 'CATEGORY' ? ' active' : '');
+        allBtn.textContent = translate('filter_all', lang);
+        allBtn.addEventListener('click', () => renderStorePage(storeId, null));
+        container.appendChild(allBtn);
 
-        // Kategori seçenekleri
-        categories.forEach(category => {
-            // category artik çevrilmiş isim (Localized Name)
-            // Sayımı buna göre yap:
-            const count = storeProducts.filter(p => getProductField(p, 'category', lang) === category).length;
-
-            const option = document.createElement('button');
-            option.className = 'category-dropdown-item ' + (activeFilter?.type === 'CATEGORY' && activeFilter.value === category ? 'active' : '');
-
-            option.textContent = category + ' '; // Zaten çevrilmiş isim
-            const optionCount = document.createElement('span');
-            optionCount.className = 'category-count';
-            optionCount.textContent = count;
-            option.appendChild(optionCount);
-            option.addEventListener('click', () => {
-                renderStorePage(storeId, { type: 'CATEGORY', value: category });
-                dropdownContent.style.display = 'none';
-            });
-            dropdownContent.appendChild(option);
-        });
-
-        // Container'a ekle
-        container.appendChild(dropdownBtn);
-        container.appendChild(dropdownContent);
-
-        // Dropdown butonu tıklama
-        dropdownBtn.addEventListener('click', () => {
-            if (dropdownContent.style.display === 'none') {
-                dropdownContent.style.display = 'block';
-                dropdownBtn.querySelector('.category-dropdown-icon').style.transform = 'rotate(180deg)';
-            } else {
-                dropdownContent.style.display = 'none';
-                dropdownBtn.querySelector('.category-dropdown-icon').style.transform = 'rotate(0deg)';
-            }
-        });
-
-        // Dropdown dışına tıklama
-        document.addEventListener('click', (e) => {
-            if (!container.contains(e.target)) {
-                dropdownContent.style.display = 'none';
-                dropdownBtn.querySelector('.category-dropdown-icon').style.transform = 'rotate(0deg)';
-            }
+        // Kategori butonları
+        categoriesMap.forEach((displayCat, baseCat) => {
+            const btn = document.createElement('button');
+            // Active klası orijinal isme göre kontrol edilecek
+            btn.className = 'category-chip' + (activeFilter?.type === 'CATEGORY' && activeFilter.value === baseCat ? ' active' : '');
+            // Ekranda çevrilmiş isim yazacak
+            btn.textContent = displayCat;
+            // Tıklandığında sisteme orijinal ismi (TM) gönderecek
+            btn.addEventListener('click', () => renderStorePage(storeId, { type: 'CATEGORY', value: baseCat }));
+            container.appendChild(btn);
         });
     };
 
@@ -686,66 +720,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ✅ PERFORMANS: Hangi mağazanın kartları oluşturuldu
     let lastRenderedStoreId = null;
 
-    // ✅ YENİ: Mağaza bazlı tembel yükleme (Lazy Loading) fonksiyonu
+    // ✅ YENİ: Mağaza bazlı tembel yükleme (Triple-Tier Yarışmalı)
     async function getStoreProducts(storeId) {
-        // 1. Önce çalışma zamanı hafızasına bak
+        // 1. Önce RAM'e (çalışma zamanı hafızası) bak
         let products = allProducts.filter(p => p.storeId === storeId);
         if (products.length > 0) return products;
 
-        // 2. IndexedDB (Yerel Hafıza) kontrolü
+        // 2. IndexedDB kontrolü (Güvenli, hataya karşı duyarlı)
         try {
             products = await showlyIDB.getProductsStore(storeId);
-            if (products.length > 0) {
-                console.log(`📦 Ürünler IndexedDB'den yüklendi (${storeId})`);
+            if (products && products.length > 0) {
+                console.log(`📦 Ürünler IndexedDB'den aktarıldı (${storeId})`);
                 allProducts = [...allProducts, ...products];
                 return products;
             }
         } catch (e) {
-            console.warn('IDB okuma hatası:', e);
+            console.warn('IDB hatası es geçildi.', e);
         }
 
-        // 3. Firebase (SDK - Birincil) - SADECE bu mağazanın ürünlerini çek
-        try {
-            console.log(`☁️ Ürünler Firebase SDK üzerinden çekiliyor (${storeId})...`);
-            const snap = await window.db.collection('products')
-                .where('storeId', '==', storeId)
-                .get();
+        console.log(`☁️ Ürün API'sine bağlanılıyor: Firebase vs Worker Yarışı (${storeId})...`);
 
-            products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // 3. Firebase ile Worker'ı yarıştır
+        const fetchFbProducts = async () => {
+            if (!window.db) throw new Error('Firebase yok');
+            const snap = await window.db.collection('products').where('storeId', '==', storeId).get();
+            return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        };
 
-            if (products.length > 0) {
-                allProducts = [...allProducts, ...products];
-                await showlyIDB.saveProducts(products);
-                console.log(`✅ ${products.length} ürün Firebase'den indirildi.`);
-                return products;
-            }
-        } catch (fbErr) {
-            console.warn('Firebase SDK hatası, Worker yedeğine geçiliyor...', fbErr);
-        }
-
-        // 4. Worker (Yedek) - Firebase çalışmazsa Worker üzerinden dene
-        try {
+        const fetchWorkerProducts = async () => {
             const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-            console.log(`🔄 Ürünler Worker yedeğinden çekiliyor (${storeId})...`);
-
-            const response = await fetch(`${WORKER_URL}?storeId=${storeId}`, {
-                method: 'GET',
-                mode: 'cors'
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                products = data.products || [];
-
-                if (products.length > 0) {
-                    allProducts = [...allProducts, ...products];
-                    await showlyIDB.saveProducts(products);
-                    console.log(`✅ ${products.length} ürün Worker'dan indirildi.`);
-                    return products;
-                }
+            const controller = new AbortController();
+            const sid = setTimeout(() => controller.abort(), 10000);
+            try {
+                const res = await fetch(`${WORKER_URL}?storeId=${storeId}`, { method: 'GET', mode: 'cors', signal: controller.signal });
+                if (!res.ok) throw new Error('Worker HTTP fail');
+                const data = await res.json();
+                if (!data.products) throw new Error('No products array in worker');
+                return data.products;
+            } finally {
+                clearTimeout(sid);
             }
-        } catch (workerErr) {
-            console.error('❌ KRİTİK: Mağaza ürünleri çekilemedi!', workerErr);
+        };
+
+        try {
+            const resultProducts = await Promise.any([
+                fetchFbProducts().catch(e => { throw e; }),
+                fetchWorkerProducts().catch(e => { throw e; })
+            ]);
+
+            if (resultProducts && resultProducts.length > 0) {
+                allProducts = [...allProducts, ...resultProducts];
+
+                // Arkaplanda önbelleğe al, kayıt hata verirse umursama devam et
+                showlyIDB.saveProducts(resultProducts).catch(e => console.warn('IDB yazma hatası gizlendi:', e));
+
+                console.log(`✅ ${resultProducts.length} ürün internetten indirildi.`);
+                return resultProducts;
+            }
+        } catch (err) {
+            console.error('❌ KRİTİK: Mağaza ürünleri hiçbir kaynaktan çekilemedi!', err);
         }
 
         return [];
@@ -967,9 +1000,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (activeFilter) {
             switch (activeFilter.type) {
                 case 'CATEGORY':
-                    // ✅ GÜNCELLENDİ: Filtreleme de localized isme göre yapılmalı
-                    const lang = getSelectedLang();
-                    visibleProductIds = new Set(storeProducts.filter(p => getProductField(p, 'category', lang) === activeFilter.value).map(p => p.id));
+                    // ✅ GÜNCELLENDİ: Filtreleme artık Orijinal (BASE) kategori ismine göre yapılır
+                    visibleProductIds = new Set(storeProducts.filter(p => p.category === activeFilter.value).map(p => p.id));
                     break;
                 case 'DISCOUNT':
                     visibleProductIds = new Set(storeProducts.filter(p => p.isOnSale).map(p => p.id));
@@ -1074,14 +1106,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             // Ana sayfada isek IndexedDB'deki TÜM yerel ürünlerde ara
             try {
-                const db = await showlyIDB.init();
-                const transaction = db.transaction(IDB_CONFIG.store, 'readonly');
-                const store = transaction.objectStore(IDB_CONFIG.store);
-                productsToSearch = await new Promise(res => {
-                    const req = store.getAll();
-                    req.onsuccess = () => res(req.result || []);
-                    req.onerror = () => res(allProducts);
-                });
+                productsToSearch = await showlyIDB.searchAllProducts();
+                if (!productsToSearch || productsToSearch.length === 0) productsToSearch = allProducts;
             } catch (e) {
                 productsToSearch = allProducts;
             }
@@ -1156,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             favoritesCount.classList.toggle('show', favorites.length > 0);
             favoritesCount.style.display = favorites.length > 0 ? 'flex' : 'none';
         }
-        localStorage.setItem('showlyFavorites', JSON.stringify(favorites));
+        SafeStorage.setItem('showlyFavorites', JSON.stringify(favorites));
     };
 
     // --- SEPET VE FAVORİ FONKSİYONLARI ---
@@ -1192,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             cartCount.classList.toggle('show', total > 0);
             cartCount.style.display = total > 0 ? 'flex' : 'none';
         }
-        localStorage.setItem('showlyCart', JSON.stringify(cart));
+        SafeStorage.setItem('showlyCart', JSON.stringify(cart));
     };
 
     // ✅ YENİ: Sepeti kaydet ve eşitle
@@ -2588,9 +2614,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- İLK YÜKLEME ---
-    // --- BAŞLATMA MANTIĞI (Sözdizimi ve Kapsam Sorunlarını Önlemek İçin En Sonda) ---
+    // --- BAŞLATMA MANTIĞI (Güvenli Yükleme ve Önbellek) ---
     async function initApp() {
         var cachedData = getCachedData();
+
+        // Eğer önbellek boşluk oluşturduysa temizleyip baypas edelim
+        if (cachedData && (!cachedData.stores || cachedData.stores.length === 0)) {
+            cachedData = null;
+            SafeStorage.removeItem(CACHE_KEY);
+        }
 
         if (cachedData && !isDirectStoreAccess) {
             allStores = cachedData.stores || [];
@@ -2599,35 +2631,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.allSubcategories = cachedData.subcategories || [];
             window.allOldCategories = cachedData.categories || [];
             window.isInitialLoadComplete = true; // ✅ Cache'den geldiyse yükleme tamdır
-            console.log(`🚀 Cache loaded: ${allStores.length} stores, ${allProducts.length} products`);
+            console.log(`🚀 Önbellek yüklendi: ${allStores.length} mağaza bulunduruyor.`);
 
             renderCategoryMenu();
             checkSiteSettings();
             router();
-            fetchAndCacheData().catch(e => console.warn('Background update error:', e));
+            fetchAndCacheData().catch(e => console.warn('Arkaplan güncelleme hatası yutuldu:', e));
         } else if (isDirectStoreAccess) {
-            if (loadingOverlay) loadingOverlay.style.display = 'flex';
             if (cachedData) {
                 allStores = cachedData.stores || [];
                 allProducts = cachedData.products || [];
                 window.allParentCategories = cachedData.parentCategories || [];
                 window.allSubcategories = cachedData.subcategories || [];
                 window.allOldCategories = cachedData.categories || [];
-                window.isInitialLoadComplete = true; // ✅ Cache'den geldiyse yükleme tamdır
+                window.isInitialLoadComplete = true;
                 router();
                 checkSiteSettings();
-                if (loadingOverlay) loadingOverlay.style.display = 'none';
+                fetchAndCacheData().catch(e => console.warn('Yenileme hatası:', e));
             } else {
                 fetchAndCacheData(true).then(() => {
                     router();
-                    fetchAndCacheData().finally(() => {
-                        if (loadingOverlay) loadingOverlay.style.display = 'none';
-                    });
+                    fetchAndCacheData().catch(e => console.warn('Arkaplan fetch hatası:', e));
                     checkSiteSettings();
                 });
             }
         } else {
-            if (loadingOverlay) loadingOverlay.style.display = 'none';
             fetchAndCacheData().then(() => {
                 renderCategoryMenu();
                 checkSiteSettings();
@@ -2661,4 +2689,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     });
+
+    // ✅ YENİ: Service Worker Kaydı (Çevrimdışı / Offline Destek)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+                console.log('✅ ServiceWorker başarıyla kayıt edildi, Offline Sistem Aktif.');
+            }).catch(err => console.warn('⚠️ ServiceWorker kaydı başarısız.', err));
+        });
+    }
 });
