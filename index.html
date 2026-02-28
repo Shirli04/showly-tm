@@ -12,7 +12,27 @@
     <link rel="preconnect" href="https://img.showlytm.store" crossorigin>
     <link rel="dns-prefetch" href="https://img.showlytm.store">
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Font Awesome: jsDelivr CDN (cdnjs yerine - daha geniş bölgesel erisim) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <!-- Yedek: jsDelivr de calismassa cdnjs dene -->
+    <script>
+        (function() {
+            var testEl = document.createElement('span');
+            testEl.className = 'fa fa-check';
+            testEl.style.cssText = 'position:absolute;left:-9999px';
+            document.head.appendChild(testEl);
+            setTimeout(function() {
+                var computed = window.getComputedStyle(testEl, ':before').getPropertyValue('content');
+                if (!computed || computed === 'none' || computed === '') {
+                    var fallback = document.createElement('link');
+                    fallback.rel = 'stylesheet';
+                    fallback.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
+                    document.head.appendChild(fallback);
+                }
+                document.head.removeChild(testEl);
+            }, 2000);
+        })();
+    </script>
     <link rel="stylesheet" href="/style.css">
     <style>
         /* Modal Düzeltmeleri */

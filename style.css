@@ -661,9 +661,9 @@ header {
 .content {
     flex: 1;
     min-width: 0;
-    /* ✅ Flexbox taşma (overflow) duzeltmesi - IE dışında evrensel destek */
-    overflow: hidden;
-    /* Yatay taşmayı engeller */
+    /* overflow: hidden bu satır sticky'yi bozar, clip kullan */
+    overflow-x: clip;
+    /* Yatay taşmayı engeller ama sticky çalışır */
 }
 
 /* ================================ STORE BANNER ================================ */
