@@ -952,11 +952,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="product-image-container">
                         <div class="img-skeleton"></div>
                         ${product.isOnSale ? '<span class="discount-badge">' + translate('discount', _lang) + '</span>' : ''}
-                        <img src="${getOptimizedImageUrl(product.imageUrl)}" 
-                             class="product-img"
-                             loading="lazy"
-                             onload="this.classList.add('loaded'); this.parentElement.querySelector('.img-skeleton').style.display='none';"
-                             onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L3RleHQ+PC9zdmc+'; this.classList.add('loaded', 'error'); this.parentElement.querySelector('.img-skeleton').style.display='none';">
+                        <img class="product-img" loading="lazy">
                         <button class="btn-favorite" data-id="${product.id}"><i class="far fa-heart"></i></button>
                     </div>
                     <div class="product-info">
@@ -980,6 +976,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     priceSpan.textContent = product.price;
                     wrapper.appendChild(priceSpan);
                 }
+
+                // ✅ Güvenilir Image Load (Önbellek sorunlarını çözer)
+                const imgEl = productCard.querySelector('.product-img');
+                const skeletonEl = productCard.querySelector('.img-skeleton');
+                imgEl.onload = () => {
+                    imgEl.classList.add('loaded');
+                    if (skeletonEl) skeletonEl.style.display = 'none';
+                };
+                imgEl.onerror = () => {
+                    imgEl.onerror = null;
+                    imgEl.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L3RleHQ+PC9zdmc+';
+                    imgEl.classList.add('loaded', 'error');
+                    if (skeletonEl) skeletonEl.style.display = 'none';
+                };
+                // src'yi en sona atamak, onload'ın her zaman tetiklenmesini garanti eder
+                imgEl.src = getOptimizedImageUrl(product.imageUrl);
+
                 productsGrid.appendChild(productCard);
                 updateFavoriteButton(product.id);
             });
@@ -1153,9 +1166,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             productCard.setAttribute('data-product-id', product.id);
             productCard.innerHTML = `
                 <div class="product-image-container">
-                    <img src="${getOptimizedImageUrl(product.imageUrl)}" 
-                         class="product-img"
-                         loading="lazy">
+                    <div class="img-skeleton"></div>
+                    <img class="product-img" loading="lazy">
                     <button class="btn-favorite" data-id="${product.id}"><i class="far fa-heart"></i></button>
                 </div>
                 <div class="product-info">
@@ -1169,6 +1181,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             productCard.querySelector('.product-title').textContent = getProductField(product, 'name', sLang);
             productCard.querySelector('.product-category-label').textContent = getProductField(product, 'category', sLang) || '';
             productCard.querySelector('.product-price').textContent = product.price;
+
+            // ✅ Güvenilir Image Load (Arama sonuçları için de)
+            const imgEl = productCard.querySelector('.product-img');
+            const skeletonEl = productCard.querySelector('.img-skeleton');
+            imgEl.onload = () => {
+                imgEl.classList.add('loaded');
+                if (skeletonEl) skeletonEl.style.display = 'none';
+            };
+            imgEl.onerror = () => {
+                imgEl.onerror = null;
+                imgEl.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L3RleHQ+PC9zdmc+';
+                imgEl.classList.add('loaded', 'error');
+                if (skeletonEl) skeletonEl.style.display = 'none';
+            };
+            imgEl.src = getOptimizedImageUrl(product.imageUrl);
+
             productsGrid.appendChild(productCard);
             updateFavoriteButton(product.id);
         });
