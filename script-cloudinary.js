@@ -2151,18 +2151,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Her bir menü maddesini ayrı bir paket kartı gibi işle
         let allDisplayPackages = [];
+        let sharedServicesHtml = ''; // Hyzmatlar tüm paketler için ortak
+
         currentStorePackages.forEach((pkg) => {
-            // ✅ YENİ: Hyzmatlar verisi için HTML oluştur
-            let servicesHtml = '';
-            if (pkg.serviceFeatures && pkg.serviceFeatures.length > 0) {
-                servicesHtml = pkg.serviceFeatures.map(f => `
-                    <li style="margin-bottom: 6px; font-size: 14px; color: #333; display: flex; align-items: flex-start; gap: 8px;">
-                        <i class="fas fa-check-circle" style="color: #e67e22; font-size: 12px; margin-top: 3px; flex-shrink: 0;"></i>
+            // İlk paketten hyzmatları al (ortak bölüm)
+            if (!sharedServicesHtml && pkg.serviceFeatures && pkg.serviceFeatures.length > 0) {
+                sharedServicesHtml = pkg.serviceFeatures.map(f => `
+                    <li style="margin-bottom: 8px; font-size: 14px; color: #333; display: flex; align-items: flex-start; gap: 10px;">
+                        <i class="fas fa-check" style="color: var(--primary-color); font-size: 12px; margin-top: 3px; flex-shrink: 0;"></i>
                         <span style="font-weight: 500;">${f.name || f}</span>
                     </li>
                 `).join('');
             }
-
 
             if (pkg.menuItems && pkg.menuItems.length > 0) {
                 pkg.menuItems.forEach((item, itemIndex) => {
@@ -2175,8 +2175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 <i class="fas fa-check" style="color: var(--primary-color); font-size: 12px; margin-top: 4px;"></i>
                                 <span style="font-weight: 500; white-space: pre-line;">${item.name}</span>
                             </li>
-                        `,
-                        servicesHtml: servicesHtml
+                        `
                     });
                 });
             } else {
@@ -2184,53 +2183,61 @@ document.addEventListener('DOMContentLoaded', async () => {
                     displayId: pkg.id,
                     displayName: pkg.packageName || 'Menýu Toplumy',
                     displayPrice: pkg.totalPrice || pkg.price,
-                    menuHtml: '<li style="color: #888;">Menýu goşulmady.</li>',
-                    servicesHtml: servicesHtml
+                    menuHtml: '<li style="color: #888;">Menýu goşulmady.</li>'
                 });
             }
         });
 
-        packagesList.innerHTML = allDisplayPackages.map((dpkg, index) => {
-            return `
-                <label class="package-item-card" style="width: 100%; min-width: 280px; margin-bottom: 15px; display: block; cursor: pointer;">
-                    <input type="radio" name="banquet-package" value="${dpkg.displayId}" ${index === 0 ? 'checked' : ''} data-price="${dpkg.displayPrice}">
-                    <div class="package-card-content" style="padding: 22px; border-radius: 20px; border: 2px solid #eee; transition: 0.3s; background: #fff; position: relative;">
-                        <div class="package-badge" style="background: #1a1a1a; color: #fff; padding: 5px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 8px;">
-                           <i class="fas fa-utensils"></i> ${dpkg.displayName}
+        // --- Menü kartları ---
+        packagesList.innerHTML = allDisplayPackages.map((dpkg, index) => `
+            <label class="package-item-card" style="width: 100%; min-width: 280px; margin-bottom: 15px; display: block; cursor: pointer;">
+                <input type="radio" name="banquet-package" value="${dpkg.displayId}" ${index === 0 ? 'checked' : ''} data-price="${dpkg.displayPrice}">
+                <div class="package-card-content" style="padding: 22px; border-radius: 20px; border: 2px solid #eee; transition: 0.3s; background: #fff; position: relative;">
+                    <div class="package-badge" style="background: #1a1a1a; color: #fff; padding: 5px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 8px;">
+                       <i class="fas fa-utensils"></i> ${dpkg.displayName}
+                    </div>
+                    <div style="font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Menýu:</div>
+                    <ul class="package-features" style="list-style: none; padding: 0; margin: 0; text-align: left;">
+                        ${dpkg.menuHtml}
+                    </ul>
+                    <div style="margin-top: 12px; font-size: 11px; color: #bbb; font-style: italic;">
+                        * Menýu mazmuny üýtgedilip bilner.
+                    </div>
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f5f5f5; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-size: 13px; color: #888; display: block;">Taban Baha:</span>
+                            <span style="font-size: 18px; font-weight: 800; color: #1a1a1a;">${dpkg.displayPrice} TMT</span>
                         </div>
+                        <div class="selection-indicator">
+                            <span style="font-size: 12px; font-weight: 600; color: var(--primary-color);">Saýlamak üçin basyň <i class="fas fa-arrow-right"></i></span>
+                        </div>
+                    </div>
+                </div>
+            </label>
+        `).join('');
 
-                        <div style="font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Menýu:</div>
-                        <ul class="package-features" style="list-style: none; padding: 0; margin: 0; text-align: left;">
-                            ${dpkg.menuHtml}
+        // --- Hyzmatlar: menü kartlarının ALTINDA ayrı bir blok ---
+        // Eski hyzmatlar bloğunu temizle
+        const existingServicesBlock = document.getElementById('banquet-services-block');
+        if (existingServicesBlock) existingServicesBlock.remove();
+
+        if (sharedServicesHtml) {
+            const servicesBlock = document.createElement('div');
+            servicesBlock.id = 'banquet-services-block';
+            servicesBlock.innerHTML = `
+                <label style="width: 100%; min-width: 280px; margin-bottom: 15px; display: block;">
+                    <div style="padding: 22px; border-radius: 20px; border: 2px solid #eee; background: #fff;">
+                        <div style="background: #1a1a1a; color: #fff; padding: 5px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-bottom: 15px; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-concierge-bell"></i> Hyzmatlar
+                        </div>
+                        <ul style="list-style: none; padding: 0; margin: 0; text-align: left;">
+                            ${sharedServicesHtml}
                         </ul>
-
-                        <div style="margin-top: 12px; font-size: 11px; color: #bbb; font-style: italic;">
-                            * Menýu mazmuny üýtgedilip bilner.
-                        </div>
-
-                        ${dpkg.servicesHtml ? `
-                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed #eee;">
-                            <div style="font-size: 11px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">Hyzmatlar:</div>
-                            <ul style="list-style: none; padding: 0; margin: 0; text-align: left;">
-                                ${dpkg.servicesHtml}
-                            </ul>
-                        </div>
-                        ` : ''}
-
-                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f5f5f5; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <span style="font-size: 13px; color: #888; display: block;">Taban Baha:</span>
-                                <span style="font-size: 18px; font-weight: 800; color: #1a1a1a;">${dpkg.displayPrice} TMT</span>
-                            </div>
-                            <div class="selection-indicator">
-                                <span style="font-size: 12px; font-weight: 600; color: var(--primary-color);">Saýlamak üçin basyň <i class="fas fa-arrow-right"></i></span>
-                            </div>
-                        </div>
                     </div>
                 </label>
             `;
-        }).join('');
-
+            packagesList.parentNode.insertBefore(servicesBlock, packagesList.nextSibling);
+        }
 
         // Paket seçimi değiştiğinde alt seçenekleri güncelle
         document.querySelectorAll('input[name="banquet-package"]').forEach(input => {
