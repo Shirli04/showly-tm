@@ -3832,20 +3832,21 @@ select {
 
 .category-filters-section {
     position: sticky;
-    top: 66px;
+    top: 75px;
     z-index: 90;
-    background-color: rgba(255, 255, 255, 0.85) !important;
-    padding: 10px 16px;
-    transition: top 0.3s ease;
-    margin: 0 !important;
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    padding: 12px 20px !important;
+    transition: all 0.3s ease;
+    margin: 10px 15px !important;
+    border-radius: 25px !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
     /* Gölgelenmeleri ve Kararmaları Kapat */
     -webkit-mask-image: none !important;
     mask-image: none !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;
-    /* Hafif bir alt gölge (denge için) */
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08) !important;
     /* Hafif Blur Ekleyerek Okunaklığı Artır */
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
 }
 
 .category-filters-section::before,
@@ -3877,7 +3878,8 @@ select {
     overflow-x: auto;
     flex-wrap: nowrap;
     /* Wrap iptal */
-    padding-bottom: 4px;
+    padding-bottom: 0;
+    /* Boşluk dengelenmesi için sıfırlandı */
     scrollbar-width: none;
     -ms-overflow-style: none;
     -webkit-overflow-scrolling: touch;

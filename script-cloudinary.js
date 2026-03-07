@@ -900,6 +900,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 productCard.className = 'product-card';
                 // ✅ Data attribute'lar filtre için
                 productCard.setAttribute('data-product-id', product.id);
+                productCard.setAttribute('data-store-id', product.storeId || '');
                 productCard.setAttribute('data-category', product.category || '');
                 productCard.setAttribute('data-on-sale', product.isOnSale ? 'true' : 'false');
                 const priceVal = parseFloat((product.price || '0').replace(' TMT', '')) || 0;
@@ -2012,8 +2013,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showNotification(`✅ ${currentStoreCart.storeName} üçin sargydyňyz kabul edildi!`, true);
 
                 // Bu mağazayı sepetten sil
-                delete cart[currentStoreCart.storeId];
+                const orderedStoreId = currentStoreCart.storeId; // storeId'yi kopyala
+                delete cart[orderedStoreId];
                 updateCartCount();
+                resetStoreCardsUI(orderedStoreId); // ✅ UI üzerindeki +/- butonlarını temizle
 
                 if (orderPhone) {
                     // SMS URL oluştur
@@ -2179,6 +2182,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     qtyContainer.querySelector('.qty-value').textContent = item.quantity;
                 }
             }
+        });
+    }
+
+    // ✅ YENİ: Sipariş sonrası veya sepet boşaldığında kartları sıfırla
+    function resetStoreCardsUI(storeId) {
+        const storeCards = document.querySelectorAll(`.product-card[data-store-id="${storeId}"]`);
+        storeCards.forEach(card => {
+            const btnCart = card.querySelector('.btn-cart');
+            const qtyContainer = card.querySelector('.quantity-control-container');
+            if (qtyContainer) qtyContainer.classList.remove('active');
+            if (btnCart) btnCart.classList.remove('hidden');
         });
     }
 
