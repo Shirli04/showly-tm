@@ -1344,7 +1344,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         saveCart(); // ✅ Kalıcı hale getir
-        showNotification(product.title + ' sebede goşuldy!');
         console.log('✅ Sepete eklendi:', product.title);
     };
 
