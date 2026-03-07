@@ -1413,35 +1413,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             return; // Scroll yapılıyorsa, click event'i tetikleme
         }
 
-        const cartBtn = e.target.closest('.btn-cart');
-        if (cartBtn) {
-            e.preventDefault(); // Prevent click event
-            e.stopPropagation(); // Stop bubbling
-            if (!touchClickExecuted) {
-                touchClickExecuted = true;
-                const product = allProducts.find(p => p.id === cartBtn.getAttribute('data-id'));
-                if (product) addToCart(product);
-            }
-            return;
-        }
-
-        const btn = e.target.closest('.btn-favorite');
-        if (btn) {
+        const favBtn = e.target.closest('.btn-favorite');
+        if (favBtn) {
             e.preventDefault();
             e.stopPropagation();
             if (!touchClickExecuted) {
                 touchClickExecuted = true;
-                const product = allProducts.find(p => p.id === btn.getAttribute('data-id'));
+                const product = allProducts.find(p => p.id === favBtn.getAttribute('data-id'));
                 if (product) toggleFavorite(product);
             }
             return;
         }
 
-        // --- YENİ ADET KONTROL EVENTLERİ (MOBİL) ---
-        handleProductActions(e);
+        // Tüm ürün içi aksiyonlarını (Sepete ekle, +, -) handleProductActions ile yönet
+        const hasAction = e.target.closest('.btn-cart') || e.target.closest('.add-btn') || e.target.closest('.remove-btn');
+        if (hasAction) {
+            if (!touchClickExecuted) {
+                touchClickExecuted = true;
+                handleProductActions(e);
+            }
+            return;
+        }
 
+        // Karta tıklandıysa (Actionlar hariç) modal aç
         const card = e.target.closest('.product-card');
-        if (card && !e.target.closest('.product-actions')) { // Actions dışına tıklanırsa detaya git
+        if (card && !e.target.closest('.product-actions')) {
             e.preventDefault();
             if (!touchClickExecuted) {
                 touchClickExecuted = true;
@@ -1453,6 +1449,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Normal click event (desktop için)
     productsGrid.addEventListener('click', (e) => {
+        if (touchClickExecuted) return; // Ghost click önleme
+
         const btn = e.target.closest('.btn-favorite');
         if (btn) {
             e.stopPropagation();
@@ -1735,9 +1733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <div class="cart-item-price">${item.price}</div>
                         </div>
                         <div class="cart-item-quantity">
-                            <button class="quantity-btn" data-store-id="${currentStoreCart.storeId}" data-id="${item.id}" data-action="decrease">-</button>
-                            <span>${item.quantity}</span>
-                            <button class="quantity-btn" data-store-id="${currentStoreCart.storeId}" data-id="${item.id}" data-action="increase">+</button>
+                            <span>${item.quantity} sany</span>
                         </div>
                         <i class="fas fa-trash cart-item-remove" data-store-id="${currentStoreCart.storeId}" data-id="${item.id}"></i>
                     </div>
@@ -1769,7 +1765,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let justTouched = false; // Ghost click önleme bayrağı
 
     document.addEventListener('touchstart', (e) => {
-        const target = e.target.closest('.quantity-btn') || e.target.closest('.cart-item-remove');
+        const target = e.target.closest('.cart-item-remove');
         if (target) {
             cartTouchStartX = e.touches[0].clientX;
             cartTouchStartY = e.touches[0].clientY;
@@ -1778,7 +1774,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
-        const target = e.target.closest('.quantity-btn') || e.target.closest('.cart-item-remove');
+        const target = e.target.closest('.cart-item-remove');
         if (target) {
             const touchEndX = e.touches[0].clientX;
             const touchEndY = e.touches[0].clientY;
@@ -1794,24 +1790,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Ortak Sepet İşlevi (Hem touch hem click için)
     const handleCartAction = (e) => {
-        const quantityBtn = e.target.closest('.quantity-btn');
-        if (quantityBtn) {
-            e.preventDefault();
-            const storeId = quantityBtn.getAttribute('data-store-id');
-            const productId = quantityBtn.getAttribute('data-id');
-            const action = quantityBtn.getAttribute('data-action');
-            if (cart[storeId]) {
-                const item = cart[storeId].items.find(i => i.id === productId);
-                if (item) {
-                    if (action === 'increase') item.quantity++;
-                    else if (action === 'decrease' && item.quantity > 1) item.quantity--;
-                    saveCart(); // ✅ Güncelle ve kaydet
-                    cartButton.click();
-                }
-            }
-            return true;
-        }
-
         const removeBtn = e.target.closest('.cart-item-remove');
         if (removeBtn) {
             e.preventDefault();
@@ -1836,7 +1814,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Sepet işlemleri hedeflenmişse
-        if (e.target.closest('.quantity-btn') || e.target.closest('.cart-item-remove')) {
+        if (e.target.closest('.cart-item-remove')) {
             justTouched = true; // Click'i bypass etmek için bayrağı kaldır
             setTimeout(() => { justTouched = false; }, 300); // 300ms sonra normale dön
             handleCartAction(e);
