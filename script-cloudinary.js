@@ -3,14 +3,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- DOM ELEMANLARI ---
     var storeList = document.getElementById('store-list');
     var productsGrid = document.getElementById('products-grid');
-
-    // YENİ: UÇAN BUTON (FAB) VE ARAMA MODALI DOM ELEMANLARI
-    var fabSearchBtn = document.getElementById('fab-search-btn');
-    var searchOverlayModal = document.getElementById('search-overlay-modal');
-    var closeSearchModalBtn = document.getElementById('close-search-modal');
-    var searchInput = document.getElementById('modal-search-input'); // Modal içindeki input
-    var searchButton = document.getElementById('modal-search-button'); // Modal içindeki arama butonu
-
+    var searchInput = document.getElementById('search-input');
+    var searchButton = document.getElementById('search-button');
     var cartButton = document.getElementById('cart-button');
     var favoritesButton = document.getElementById('favorites-button');
     var cartCount = document.querySelector('.cart-count');
@@ -1373,30 +1367,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.style.overflow = '';
     });
 
-    // --- YÜZEN ARAMA (MODAL) OLAYLARI ---
-
-    // Arama modalını açma (Uçan Search Butonuna tıklandığında)
-    fabSearchBtn.addEventListener('click', () => {
-        searchOverlayModal.classList.add('active');
-        // Açılır açılmaz inputa odaklan
-        setTimeout(() => searchInput.focus(), 100);
-    });
-
-    // Arama modalını kapatma (Çarpı butonuna tıklandığında)
-    closeSearchModalBtn.addEventListener('click', () => {
-        searchOverlayModal.classList.remove('active');
-        searchInput.value = ''; // Kapatınca temizle
-    });
-
-    // Ana arama fonksiyonunu çalıştırma (Tıklama ve Enter)
-    const executeSearch = () => {
-        performSearch();
-        searchOverlayModal.classList.remove('active'); // Aramadan sonra modalı kapat
-    };
-
-    searchButton.addEventListener('click', executeSearch);
+    // Arama
+    searchButton.addEventListener('click', performSearch);
     searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') executeSearch();
+        if (e.key === 'Enter') performSearch();
     });
 
     // Filtreler butonu

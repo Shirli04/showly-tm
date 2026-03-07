@@ -145,10 +145,16 @@
             </div>
         </div>
 
-
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="Gözle..." data-i18n-placeholder="search_placeholder">
+            <button type="button" id="search-button"><i class="fas fa-search"></i></button>
+        </div>
 
         <div class="user-actions">
-            <!-- Eski tasarımdaki üst sepet butonu iptal edildi (Floating yapıldı) -->
+            <button id="cart-button">
+                <i class="fas fa-shopping-cart"></i>
+                <span class="cart-count">0</span>
+            </button>
             <button id="favorites-button">
                 <i class="fas fa-heart"></i>
                 <span class="favorites-count">0</span>
@@ -864,41 +870,6 @@
                             </button>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- ==========================================
-             UÇAN BUTONLAR (FLOATING ACTION BUTTONS) 
-             ========================================== -->
-        <div class="floating-action-menu">
-            <!-- Arama Butonu -->
-            <button class="fab-btn fab-search" id="fab-search-btn" title="Gözleg">
-                <i class="fas fa-search"></i>
-            </button>
-
-            <!-- Sepet Butonu -->
-            <button class="fab-btn fab-cart" id="cart-button" title="Sebet">
-                <i class="fas fa-shopping-cart"></i>
-                <span class="cart-count">0</span>
-            </button>
-        </div>
-
-        <!-- Yüzen Arama Modalı (Overlay) -->
-        <div class="search-overlay-modal" id="search-overlay-modal">
-            <div class="search-modal-content">
-                <button class="close-search-modal" id="close-search-modal"><i class="fas fa-times"></i></button>
-                <div class="search-modal-header">
-                    <h3 data-i18n="search_placeholder">Gözle...</h3>
-                </div>
-                <div class="search-modal-body">
-                    <div class="modal-search-bar">
-                        <i class="fas fa-search search-icon-left"></i>
-                        <input type="text" id="modal-search-input" placeholder="Haryt ady..."
-                            data-i18n-placeholder="search_placeholder">
-                        <button type="button" id="modal-search-button"><span
-                                data-i18n="search_placeholder">Gözle</span></button>
-                    </div>
                 </div>
             </div>
         </div>
