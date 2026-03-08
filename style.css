@@ -1306,11 +1306,10 @@ header {
 }
 
 /* JS Filtreleme esnasında ürün kartlarının "Sıralanıyor" geçiş animasyonu için class'ı */
+/* iOS Webkit (Safari) Çökme Döngüsü Hatası olmaması için transition ve transform silindi! */
 .products-filtering {
     opacity: 0.5;
-    transform: scale(0.98);
     pointer-events: none;
-    transition: all 0.3s ease;
 }
 
 /* Reklam Kısmı vb. Responsive Düzenlemeler için Medya Sorguları vs. buralarda kalabilir. */

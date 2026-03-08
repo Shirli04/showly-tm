@@ -1090,52 +1090,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         const allCards = productsGrid.querySelectorAll('.product-card[data-product-id]');
         let visibleCount = 0;
 
-        // Ürün listesinde "animasyonlu geçiş" (Sıralanıyor efekti) için hazırlık
+        // Ürün listesinde "animasyonlu geçiş" (Sıralanıyor efekti) için hazırlık (Sadece opacity)
         productsGrid.classList.add('products-filtering');
 
-        setTimeout(() => {
-            allCards.forEach(card => {
-                const productId = String(card.getAttribute('data-product-id'));
-                if (visibleProductIds.has(productId)) {
-                    card.style.display = '';
-                    visibleCount++;
-                } else {
-                    card.style.display = 'none';
-                }
+        // ✅ iOS Safari CRASH (Yönlendirme hatası) Önlemi: setTimeout kaldırıldı, işlem sekron yapılıyor.
+        // Safari çoklu DOM değişikliklerinde (display: none/block) asenkron beklerse GPU sızıntısı yapar.
+        allCards.forEach(card => {
+            const productId = String(card.getAttribute('data-product-id'));
+            if (visibleProductIds.has(productId)) {
+                card.style.display = '';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // ✅ Sıralama gerekiyorsa kartların DOM sırasını değiştir (resimler yine korunur!)
+        if (activeFilter?.type === 'SORT_PRICE_ASC' || activeFilter?.type === 'SORT_PRICE_DESC') {
+            const visibleCards = Array.from(allCards).filter(c => c.style.display !== 'none');
+            visibleCards.sort((a, b) => {
+                const priceA = parseFloat(a.getAttribute('data-product-price')) || 0;
+                const priceB = parseFloat(b.getAttribute('data-product-price')) || 0;
+                return activeFilter.type === 'SORT_PRICE_ASC' ? priceA - priceB : priceB - priceA;
             });
+            // DOM sırasını değiştir (resimler korunur çünkü kartlar taşınıyor, silinmiyor!)
+            visibleCards.forEach(card => productsGrid.appendChild(card));
+            console.log(`✅ Ürünler ${activeFilter.type === 'SORT_PRICE_ASC' ? 'arzandan gymmada' : 'gymmatdan arzana'} sıralandı`);
+        }
 
-            // ✅ Sıralama gerekiyorsa kartların DOM sırasını değiştir (resimler yine korunur!)
-            if (activeFilter?.type === 'SORT_PRICE_ASC' || activeFilter?.type === 'SORT_PRICE_DESC') {
-                const visibleCards = Array.from(allCards).filter(c => c.style.display !== 'none');
-                visibleCards.sort((a, b) => {
-                    const priceA = parseFloat(a.getAttribute('data-product-price')) || 0;
-                    const priceB = parseFloat(b.getAttribute('data-product-price')) || 0;
-                    return activeFilter.type === 'SORT_PRICE_ASC' ? priceA - priceB : priceB - priceA;
-                });
-                // DOM sırasını değiştir (resimler korunur çünkü kartlar taşınıyor, silinmiyor!)
-                visibleCards.forEach(card => productsGrid.appendChild(card));
-                console.log(`✅ Ürünler ${activeFilter.type === 'SORT_PRICE_ASC' ? 'arzandan gymmada' : 'gymmatdan arzana'} sıralandı`);
-            }
+        // "Ürün bulunamadı" mesajı
+        const existingNoResults = productsGrid.querySelector('.no-results');
+        if (existingNoResults) existingNoResults.remove();
 
-            // "Ürün bulunamadı" mesajı
-            const existingNoResults = productsGrid.querySelector('.no-results');
-            if (existingNoResults) existingNoResults.remove();
+        if (visibleCount === 0 && window.isInitialLoadComplete) {
+            const lang = getSelectedLang();
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.innerHTML = '<i class="fas fa-box-open"></i><h3></h3>';
+            noResults.querySelector('h3').textContent = translate('filter_no_product', lang);
+            productsGrid.appendChild(noResults);
+        }
 
-            if (visibleCount === 0 && window.isInitialLoadComplete) {
-                const lang = getSelectedLang();
-                const noResults = document.createElement('div');
-                noResults.className = 'no-results';
-                noResults.innerHTML = '<i class="fas fa-box-open"></i><h3></h3>';
-                noResults.querySelector('h3').textContent = translate('filter_no_product', lang);
-                productsGrid.appendChild(noResults);
-            }
+        console.log(`✅ Filtre uygulandı: ${visibleCount}/${storeProducts.length} ürün gösteriliyor`);
 
-            console.log(`✅ Filtre uygulandı: ${visibleCount}/${storeProducts.length} ürün gösteriliyor`);
-
-            // Animasyonu bitir
+        // Opacity efektini temizle (Saniyelik flash etkisi yeterlidir)
+        setTimeout(() => {
             productsGrid.classList.remove('products-filtering');
-
-        }, 300); // .products-filtering CSS geçiş süresi (0.3s) ile aynı olmalı
+        }, 10);
     };
 
     // ✅ YENİ: Site Ayarlarını Kontrol Et (Kategori Gizleme)
