@@ -943,8 +943,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
 
-                // HIZ OPTİMİZASYONU: Kullanıcının ilk göreceği (ilk 6) resimde `lazy` kullanma, öncelikli indirilsin.
-                const lazyAttribute = index >= 6 ? 'loading="lazy"' : '';
+                // Safari iOS üzerinde dinamik DOM enjeksiyonlarında loading="lazy" buglı çalıştığı için iptal edildi.
+                // Bunun yerine decoding="async" kullanılarak sayfa kilitlenmesi önleniyor.
+                const imageAttributes = 'decoding="async"';
 
                 // ✅ GÜNCELLENDİ: Çok dilli ürün kartı
                 const _lang = getSelectedLang();
@@ -952,7 +953,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ${product.isOnSale ? `<div class="discount-badge">${translate('discount', _lang)}</div>` : ''}
                     <div class="product-image-container">
                         <div class="img-skeleton"></div>
-                        <img class="product-img" ${lazyAttribute}>
+                        <img class="product-img" ${imageAttributes}>
                         <button class="btn-favorite" data-id="${product.id}" title="${translate('add_to_favorites', _lang) || 'Halanlaryma goş'}">
                             <i class="far fa-heart"></i>
                         </button>
