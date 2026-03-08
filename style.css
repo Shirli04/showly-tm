@@ -3856,9 +3856,6 @@ select {
     /* Hafif Blur Ekleyerek Okunaklığı Artır */
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
-    /* iOS Scroll Donmasını Engellemek İçin GPU Katmanı */
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
 }
 
 .category-filters-section::before,
@@ -3899,11 +3896,6 @@ select {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-
-    /* iOS GPU İvmelendirmesi (Scroll donmalarını önler) */
-    -webkit-transform: translate3d(0, 0, 0);
-    transform: translate3d(0, 0, 0);
-    will-change: transform, scroll-position;
 }
 
 .category-buttons-container::-webkit-scrollbar {
