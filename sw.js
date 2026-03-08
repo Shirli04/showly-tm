@@ -5,7 +5,8 @@ const ASSETS_TO_CACHE = [
     '/style.css',
     '/script-cloudinary.js',
     '/firebase-config.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+    'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css'
 ];
 
 // Install Event: Cache essential files
