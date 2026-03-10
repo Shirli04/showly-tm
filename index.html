@@ -8,31 +8,22 @@
     <link rel="icon"
         href="https://res.cloudinary.com/domv6ullp/image/upload/v1765385200/logo_e_background_removal_b_rgb_FFFFFF_f_png_vjwprg.png">
 
-    <!-- ✅ HIZ OPTİMİZASYONU: Resim sunucusuna önceden DNS ve TLS bağlantısı kur (Yüklemeyi 200-300ms hızlandırır) -->
+    <!-- ✅ HİZ OPTİMİZASYONU: Resim sunucusuna önceden DNS ve TLS bağlantısı kur (Yüklemeyi 200-300ms hızlandırır) -->
     <link rel="preconnect" href="https://img.showlytm.store" crossorigin>
     <link rel="dns-prefetch" href="https://img.showlytm.store">
 
-    <!-- Font Awesome: jsDelivr CDN (cdnjs yerine - daha geniş bölgesel erisim) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    <!-- Yedek: jsDelivr de calismassa cdnjs dene -->
-    <script>
-        (function () {
-            var testEl = document.createElement('span');
-            testEl.className = 'fa fa-check';
-            testEl.style.cssText = 'position:absolute;left:-9999px';
-            document.head.appendChild(testEl);
-            setTimeout(function () {
-                var computed = window.getComputedStyle(testEl, ':before').getPropertyValue('content');
-                if (!computed || computed === 'none' || computed === '') {
-                    var fallback = document.createElement('link');
-                    fallback.rel = 'stylesheet';
-                    fallback.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css';
-                    document.head.appendChild(fallback);
-                }
-                document.head.removeChild(testEl);
-            }, 2000);
-        })();
-    </script>
+    <!-- ✅ PRELOAD: Kritik kaynakları önceden yükle -->
+    <link rel="preload" href="/style.css" as="style">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
+    <!-- Font Awesome: Non-Blocking (Render-Blocking engelini kaldırır) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"
+        media="print" onload="this.media='all'">
+    <noscript>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    </noscript>
+
     <link rel="stylesheet" href="/style.css">
     <style>
         /* Modal Düzeltmeleri */
@@ -342,301 +333,8 @@
         </div>
     </div>
 
+    <!-- Banquet/Bron modal stilleri style.css dosyasına taşındı (PageSpeed Optimizasyonu) -->
 
-    <style>
-        /* ================================ BANQUET PLANNING (ZİYAFET) MODAL ================================ */
-        .banquet-modal {
-            z-index: 10001 !important;
-            display: none;
-            overflow-y: auto !important;
-            background: rgba(0, 0, 0, 0.6) !important;
-            backdrop-filter: blur(5px);
-        }
-
-        .banquet-modal .modal-content {
-            max-width: 700px !important;
-            width: 95% !important;
-            margin: 0 auto;
-            border-radius: 30px !important;
-            min-height: auto;
-            background: #fff !important;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2) !important;
-            position: relative;
-            overflow: hidden;
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-
-        @media (min-width: 768px) {
-            .banquet-modal .modal-content {
-                margin-top: 50px;
-                margin-bottom: 50px;
-            }
-
-            .event-types-grid {
-                grid-template-columns: repeat(3, 1fr) !important;
-            }
-
-            .packages-grid {
-                display: grid !important;
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
-                gap: 20px !important;
-                overflow-x: visible !important;
-            }
-        }
-
-        .banquet-container {
-            padding-bottom: 40px;
-        }
-
-        .banquet-header {
-            background: linear-gradient(135deg, #1a1a1a, #444);
-            color: white;
-            padding: 50px 20px 70px;
-            text-align: center;
-            border-radius: 0 0 40px 40px;
-            position: relative;
-        }
-
-        .banquet-icon {
-            font-size: 32px;
-            background: rgba(255, 255, 255, 0.15);
-            width: 70px;
-            height: 70px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 22px;
-            margin: 0 auto 15px;
-            border: 1.5px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .banquet-hero {
-            margin: -40px 30px 0;
-            background: white;
-            padding: 25px;
-            border-radius: 25px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            position: relative;
-            z-index: 5;
-            border: 1px solid #f0f0f0;
-        }
-
-        .banquet-hero h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
-            background: linear-gradient(90deg, #1a1a1a, #666);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .banquet-section {
-            padding: 35px 30px 0;
-        }
-
-        .banquet-section h3 {
-            font-size: 19px;
-            margin-bottom: 18px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #1a1a1a;
-            font-weight: 800;
-        }
-
-        .event-types-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-        }
-
-        .event-type-card .card-content {
-            border: 2px solid #f0f0f0;
-            padding: 18px 15px;
-            border-radius: 20px;
-            text-align: center;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
-            background: #fff;
-        }
-
-        .event-type-card input {
-            display: none;
-        }
-
-        .event-type-card input:checked+.card-content {
-            border-color: var(--primary-color);
-            background: #fff7f7;
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-        }
-
-        .date-availability-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        #banquet-date {
-            flex: 1;
-            padding: 15px;
-            border: 2px solid #f0f0f0;
-            border-radius: 18px;
-            font-size: 16px;
-            font-family: inherit;
-            outline: none;
-            transition: 0.3s;
-        }
-
-        #banquet-date:focus {
-            border-color: var(--primary-color);
-        }
-
-        .availability-status {
-            font-size: 14px;
-            font-weight: 700;
-            color: #2ecc71;
-            padding: 10px 18px;
-            background: #effaf3;
-            border-radius: 20px;
-            border: 1px solid rgba(46, 204, 113, 0.2);
-        }
-
-        /* Packages */
-        .packages-grid {
-            display: flex;
-            gap: 15px;
-            overflow-x: auto;
-            padding: 5px 5px 20px;
-            scrollbar-width: none;
-            /* Firefox */
-        }
-
-        .packages-grid::-webkit-scrollbar {
-            display: none;
-        }
-
-        /* Chrome/Safari */
-
-        .package-item-card {
-            min-width: 280px;
-            flex: 0 0 280px;
-        }
-
-        .package-card-content {
-            border: 2px solid #f0f0f0;
-            padding: 24px;
-            border-radius: 24px;
-            cursor: pointer;
-            transition: 0.4s;
-            background: #fff;
-        }
-
-        .package-item-card input {
-            display: none;
-        }
-
-        .package-item-card input:checked+.package-card-content {
-            border-color: var(--primary-color);
-            background: #fff;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
-            transform: scale(1.02);
-        }
-
-        /* Contact Inputs */
-        .input-group {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background: #f9f9f9;
-            padding: 15px 20px;
-            border-radius: 20px;
-            margin-bottom: 12px;
-            border: 1px solid #f0f0f0;
-            transition: 0.3s;
-        }
-
-        .input-group:focus-within {
-            background: #fff;
-            border-color: var(--primary-color);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        .input-group i {
-            color: #888;
-            font-size: 18px;
-        }
-
-        .input-group input {
-            border: none;
-            background: transparent;
-            width: 100%;
-            outline: none;
-            font-size: 16px;
-            font-weight: 500;
-        }
-
-        /* Summary */
-        .banquet-summary-card {
-            background: #1a1a1a;
-            color: white;
-            margin: 40px 30px 0;
-            padding: 30px;
-            border-radius: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 15px;
-            opacity: 0.9;
-        }
-
-        .summary-item.total {
-            font-size: 24px;
-            font-weight: 800;
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            padding-top: 20px;
-            margin-top: 20px;
-            opacity: 1;
-        }
-
-        .admin-notice {
-            font-size: 12px;
-            color: #aaa;
-            margin-top: 15px;
-            text-align: center;
-            font-style: italic;
-        }
-
-        .banquet-submit-btn {
-            width: 100%;
-            padding: 20px;
-            border-radius: 20px;
-            border: none;
-            background: #fff;
-            color: #1a1a1a;
-            font-weight: 800;
-            font-size: 17px;
-            margin-top: 25px;
-            cursor: pointer;
-            transition: 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .banquet-submit-btn:hover {
-            background: #f0f0f0;
-            transform: translateY(-2px);
-        }
-    </style>
 
     <!-- Ziyafet Planlama Modalı -->
     <div id="banquet-modal" class="modal banquet-modal">
@@ -882,21 +580,8 @@
         <!-- ✅ YENİ: Çok dilli destek modülü -->
         <script defer src="/language.js"></script>
 
-
-
-        <script defer src="/r2-config.js"></script>
-
-        <!-- Gerekli Kütüphaneler -->
-        <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-        <!-- Google Drive API -->
-        <script defer src="https://apis.google.com/js/api.js"></script>
-
         <!-- Ana Script -->
         <script defer src="/script-cloudinary.js"></script>
-
-        <!-- Excel Manager -->
-        <script defer src="/excel-manager.js"></script>
 </body>
 
 </html>
