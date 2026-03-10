@@ -6,12 +6,12 @@ let globalOrders = [];
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Admin paneli yükleniyor...');
 
-    // ✅ LOADING EKRANI İPTAL EDİLDİ (SKELETON KULLANILACAK)
+    // ✅ LOADING EKRANI GÖSTERİLİYOR (loadAllData biterken gizlenecek)
     const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingOverlay) loadingOverlay.style.display = 'none';
+    if (loadingOverlay) loadingOverlay.style.display = 'flex';
 
-    // ✅ sessionStorage'dan kullanıcıyı al (localStorage değil!)
-    const currentUser = JSON.parse(sessionStorage.getItem('adminUser'));
+    // ✅ localStorage'dan kullanıcıyı al (iOS Safari uyumluluğu için)
+    const currentUser = JSON.parse(localStorage.getItem('adminUser'));
 
     // Eğer kullanıcı yoksa login'e yönlendir
     if (!currentUser) {
@@ -38,9 +38,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // ✅ YENİ: Dashboard (Ana Ekran) Skeleton Fonksiyonları
+    window.showDashboardSkeleton = () => {
+        const statCards = document.querySelectorAll('.stat-info h3');
+        statCards.forEach(card => {
+            card.innerHTML = `<div style="width: 60px; height: 30px; background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeletonLoading 1.5s infinite; border-radius: 4px; display: inline-block;"></div>`;
+        });
+
+        const chartCards = document.querySelectorAll('.chart-card canvas');
+        chartCards.forEach(canvas => {
+            // Canvas parent'ına skeleton class ekle
+            canvas.parentElement.classList.add('skeleton-box-active');
+        });
+    };
+
+    window.hideDashboardSkeleton = () => {
+        const chartCards = document.querySelectorAll('.chart-card');
+        chartCards.forEach(card => {
+            card.classList.remove('skeleton-box-active');
+        });
+    };
+
     console.log('✅ Giriş yapan kullanıcı:', currentUser.username);
 
     // DOM elemanları
+
     const productIsOnSale = document.getElementById('product-is-on-sale');
     const originalPriceGroup = document.getElementById('original-price-group');
     const productOriginalPrice = document.getElementById('product-original-price');
@@ -2532,10 +2554,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                // ✅ sessionStorage'dan temizle (localStorage değil!)
-                sessionStorage.removeItem('adminUser');
+                // ✅ localStorage'dan temizle
+                localStorage.removeItem('adminUser');
                 // ✅ replace kullan (geri tuşuyla dönmeyi engeller)
-                window.location.replace('/login.html');
+                window.location.replace('login.html');
             });
         }
 
@@ -3352,115 +3374,117 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sayfa yüklendiğinde bekleyen siparişleri kontrol et
     processPendingOrders();
 
-    // ✅ Tüm verileri yükleyen fonksiyon - Optimize Edilmiş (Anında Açılır)
+    // ✅ Tüm verileri yükleyen fonksiyon - Güvenli ve Kararlı Veri Akışı
     const loadAllData = async () => {
         const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) loadingOverlay.style.display = 'none'; // Tam ekran loading iptal, skeleton kullanılacak
 
         try {
-            console.log('Tüm veriler Firebase\'den yükleniyor (admin)...');
+            console.log('🔄 Veriler Firebase\'den yükleniyor (admin)...');
+            window.showDashboardSkeleton();
             window.showTableSkeleton('stores-table-body', 5, 5);
             window.showTableSkeleton('products-table-body', 6, 6);
             window.showTableSkeleton('orders-table-body', 9, 5);
 
+            // Firebase'den veri çekme (Birincil Kaynak)
             const fetchFirebase = async () => {
-                const [storesSnap, productsSnap, ordersSnap] = await Promise.all([
-                    window.db.collection('stores').get().catch(e => { console.error('Stores error:', e); return { docs: [] }; }),
-                    window.db.collection('products').get().catch(e => { console.error('Products error:', e); return { docs: [] }; }),
-                    window.db.collection('orders').orderBy('date', 'desc').get().catch(e => { console.error('Orders error:', e); return { docs: [] }; })
+                const results = await Promise.allSettled([
+                    window.db.collection('stores').get(),
+                    window.db.collection('products').get(),
+                    window.db.collection('orders').orderBy('date', 'desc').get()
                 ]);
 
-                return {
-                    stores: storesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                    products: productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                    orders: ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                    source: 'Firebase'
-                };
+                const stores = results[0].status === 'fulfilled' ? results[0].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
+                const products = results[1].status === 'fulfilled' ? results[1].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
+                const orders = results[2].status === 'fulfilled' ? results[2].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
+
+                if (results[2].status === 'rejected') {
+                    console.error('⚠️ Siparişler (Permissions) Hatası:', results[2].reason);
+                }
+
+                return { stores, products, orders, source: 'Firebase' };
             };
 
+            // Worker'dan veri çekme (Sadece Stores ve Products için Yedek)
             const fetchWorker = async () => {
                 const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
                 try {
                     const response = await fetch(WORKER_URL, {
-                        method: 'GET', mode: 'cors', cache: 'no-cache', signal: controller.signal
+                        method: 'GET', mode: 'cors', cache: 'no-cache'
                     });
-                    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const data = await response.json();
-                    if (!data || !data.stores) throw new Error('Geçersiz Worker verisi');
-
-                    // Worker'da orders yoksa Firebase'den beklemek zorunda kalabilir, o yüzden Worker'ı sadece stores ve products için kullanıp orders'ı Firebase'den ekleyelim
-                    const ordersSnap = await window.db.collection('orders').orderBy('date', 'desc').get().catch(() => ({ docs: [] }));
 
                     return {
                         stores: data.stores || [],
-                        products: data.allProducts || [], // Varsayım: Worker'ın products döndürdüğüne emin olmalıyız, yoksa Firebase kazanır
-                        orders: ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                        products: data.allProducts || data.products || [],
+                        orders: [], // Worker sipariş taşımaz
                         source: 'Worker'
                     };
-                } finally {
-                    clearTimeout(timeoutId);
+                } catch (e) {
+                    console.error('Worker Fallback Hatası:', e);
+                    throw e;
                 }
             };
 
-            // Yarış başlasın! (Hangi sunucu daha hızlıysa)
-            const result = await Promise.any([
-                fetchFirebase(),
-                fetchWorker()
-            ]).catch(fetchFirebase); // İkisi de patlarsa son çare Firebase'i bekle
+            let result;
+            try {
+                // Öncelik Firebase'de ama çok yavaşsa Worker devreye girsin diye bir yarış başlatılabilir
+                // Ancak Admin panelinde DOĞRU veri (Firebase) her zaman önceliklidir.
+                result = await fetchFirebase();
+
+                // Eğer Firebase kritik verileri (stores/products) boş döndüyse ve Worker varsa yedekle
+                if (result.stores.length === 0 && result.products.length === 0) {
+                    console.warn('⚠️ Firebase boş döndü, Worker deneniyor...');
+                    const workerResult = await fetchWorker().catch(() => null);
+                    if (workerResult) {
+                        result.stores = workerResult.stores;
+                        result.products = workerResult.products;
+                        result.source = 'Firebase + Worker';
+                    }
+                }
+            } catch (err) {
+                console.error('Firebase ana veri yükleme hatası:', err);
+                result = await fetchWorker().catch(() => ({ stores: [], products: [], orders: [], source: 'Error' }));
+            }
 
             console.log(`✅ Admin verileri yüklendi (KAYNAK: ${result.source})`);
 
-            const stores = result.stores;
-            const products = result.products;
-            const orders = result.orders;
+            globalStores = result.stores;
+            globalProducts = result.products;
+            globalOrders = result.orders;
 
-            globalStores = stores;
-            globalProducts = products;
-            globalOrders = orders;
-
+            window.hideDashboardSkeleton();
             updateDashboard(globalStores, globalProducts, globalOrders);
 
-            // Sadece admin menüleri açıksa o tabloları çiz
+            // Aktif sekmeyi güncelle
+
             const activeSection = document.querySelector('.content-section.active');
-            if (activeSection) {
-                const sectionId = activeSection.id;
-                if (sectionId === 'stores') renderStoresTable(globalStores, globalProducts);
-                if (sectionId === 'products') renderProductsTable(globalProducts, globalStores);
-                if (sectionId === 'orders') renderOrdersTable(globalOrders, globalProducts, globalStores);
-                if (sectionId === 'users' && currentUser.role === 'superadmin') renderUsersTable();
-                if (sectionId === 'categories') {
-                    renderParentCategoriesTable();
-                    renderSubcategoriesTable();
-                }
-            } else {
-                renderStoresTable(globalStores, globalProducts);
+            const sectionId = activeSection ? activeSection.id : 'stores';
+
+            if (sectionId === 'stores') renderStoresTable(globalStores, globalProducts);
+            if (sectionId === 'products') renderProductsTable(globalProducts, globalStores);
+            if (sectionId === 'orders') renderOrdersTable(globalOrders, globalProducts, globalStores);
+            if (sectionId === 'users' && currentUser.role === 'superadmin') renderUsersTable();
+            if (sectionId === 'categories') {
+                renderParentCategoriesTable();
+                renderSubcategoriesTable();
             }
 
-            // Gerekli dropdownları doldur
-            populateStoreSelect(); // Assuming populateStoreSelect is the correct function name
+            // Dropdownları doldur
+            populateStoreSelect();
             populateStoreFilter();
-            renderReservationStores(); // Rezervasyon dropdown doldur (zaten allStores filter yapıyor)
-            renderBronStores(); // Bron dropdown doldur
+            renderReservationStores();
+            renderBronStores();
 
             if (loadingOverlay) loadingOverlay.style.display = 'none';
-
-            // Otomatik yenilemeyi başlat
             startAutoRefresh();
-            console.log('✅ Tüm veriler yüklendi.');
+            console.log('✅ Tüm işlemler tamamlandı.');
 
         } catch (error) {
-            console.error('❌ Veriler yüklenemedi:', error);
-            const isConnError = error.message && (
-                error.message.includes('reach Cloud Firestore') ||
-                error.message.includes('unavailable') ||
-                error.message.includes('network')
-            );
-
-            showNotification(
-                isConnError ? 'İnternet bağlantısı hatası! VPN kullanıyor musunuz?' : 'Veriler yüklenemedi! Sayfayı yenileyin.',
-                false
-            );
+            console.error('❌ Yükleme sırasında kritik hata:', error);
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
+            showNotification('Bağlantı sorunu! Lütfen internetinizi kontrol edin.', false);
         }
     };
 

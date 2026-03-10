@@ -236,8 +236,8 @@
                 submitBtn.innerHTML = '<i class="fas fa-check-circle"></i> Dogry!';
                 submitBtn.style.background = 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)';
 
-                // sessionStorage kullan (tarayıcı kapanınca silinir - güvenli)
-                sessionStorage.setItem('adminUser', JSON.stringify({
+                // ✅ localStorage kullan (iOS Safari uyumluluğu ve süreklilik için)
+                localStorage.setItem('adminUser', JSON.stringify({
                     id: usersSnapshot.docs[0].id,
                     username: userData.username,
                     role: userData.role,
@@ -245,7 +245,7 @@
                 }));
 
                 setTimeout(() => {
-                    window.location.replace('/admin.html');
+                    window.location.href = 'admin.html'; // Relatif yol daha güvenli
                 }, 800);
 
             } catch (error) {

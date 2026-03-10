@@ -977,8 +977,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 productCard.innerHTML = `
                     ${product.isOnSale ? `<div class="discount-badge">${translate('discount', _lang)}</div>` : ''}
                     <div class="product-image-container">
-                        <div class="img-skeleton" ${isLCP ? 'style="display:none;"' : ''}></div>
-                        <img class="product-img ${isLCP ? 'loaded' : ''}" src="${isLCP ? targetImageUrl : fallbackImage}" ${isLCP ? '' : `data-src="${targetImageUrl}" decoding="async"`} alt="Product">
+                        <div class="img-skeleton"></div>
+                        <img class="product-img" src="${targetImageUrl}" loading="${isLCP ? 'eager' : 'lazy'}" decoding="async" alt="Product">
                         <button class="btn-favorite" data-id="${product.id}" title="${translate('add_to_favorites', _lang) || 'Halanlaryma goş'}">
                             <i class="far fa-heart"></i>
                         </button>
@@ -1015,35 +1015,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     wrapper.appendChild(priceSpan);
                 }
 
-                // ✅ GÜVENİLİR RESİM İZLEYİCİSİ (INTERSECTION OBSERVER)
+                // ✅ NATIVE LAZY LOADING (Tarayıcı Donanım Hızlandırması)
+                // JS Observer yerine modern tarayıcıların sunduğu loading="lazy" kullanılır.
                 const imgEl = productCard.querySelector('.product-img');
                 const skeletonEl = productCard.querySelector('.img-skeleton');
 
+                // Resim tamamen indiğinde iskeleti sil ve göster
                 imgEl.onload = () => {
-                    // Sadece gerçek resim yüklendiğinde skeleton'u sil
-                    if (imgEl.src !== fallbackImage) {
-                        imgEl.classList.add('loaded');
-                        if (skeletonEl) skeletonEl.style.display = 'none';
-                    }
+                    imgEl.classList.add('loaded');
+                    if (skeletonEl) skeletonEl.style.display = 'none';
                 };
 
+                // Eğer resim bulunamazsa veya 404 dönerse
                 imgEl.onerror = () => {
-                    if (imgEl.src !== fallbackImage) {
-                        imgEl.onerror = null;
-                        imgEl.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L3RleHQ+PC9zdmc+'; // "Surat Yok" resmi
-                        imgEl.classList.add('loaded', 'error');
-                        if (skeletonEl) skeletonEl.style.display = 'none';
-                    }
+                    imgEl.onerror = null;
+                    imgEl.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L3RleHQ+PC9zdmc+'; // "Surat Yok" resmi
+                    imgEl.classList.add('loaded', 'error');
+                    if (skeletonEl) skeletonEl.style.display = 'none';
                 };
 
-                // Observer ile tembel yükleme ataması (Global Object Kullanımı)
-                if (!isLCP) {
-                    if (globalImgObserver) {
-                        globalImgObserver.observe(imgEl);
-                    } else {
-                        // Eski tarayıcılar için hemen yükle
-                        if (imgEl.dataset.src) imgEl.src = imgEl.dataset.src;
-                    }
+                // LCP (İlk açılış resimleri) önbellekten geldiyse onload tetiklenmeyebilir, elde kontrol et:
+                if (imgEl.complete && imgEl.naturalWidth > 0) {
+                    imgEl.classList.add('loaded');
+                    if (skeletonEl) skeletonEl.style.display = 'none';
                 }
 
                 productsFragment.appendChild(productCard); // DOM'a değil Fragment rulosuna ekle
@@ -2250,7 +2244,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             url = url.replace('http://', 'https://');
         }
 
-        // Cloudflare R2 veya diğer URL'leri olduğu gibi döndür
+        // Kullanıcı WebP yüklediği için ek CDN Resizing'e gerek yok, orijin linkini döndür.
         return url;
     }
 
@@ -2268,9 +2262,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const modalSkeleton = document.getElementById('modal-img-skeleton');
 
         // ✅ GÜNCELLENDİ: Tıklanan ürünün ekrandaki mevcut resim kaynağını bul (Yeniden yüklemeyi önle)
-        let preloadedImageUrl = product.imageUrl;
-        const existingImgEl = document.querySelector(`.product-card[onclick="openProductModal('${productId}')"] img.product-img`);
-        if (existingImgEl && existingImgEl.src) {
+        let preloadedImageUrl = product.imageUrl; // Varsayılan CDN Linki
+        const existingImgEl = document.querySelector(`.product-card img[src*="${product.id}"]`) || document.querySelector(`.btn-favorite[data-id="${productId}"]`)?.closest('.product-card')?.querySelector('.product-img');
+
+        if (existingImgEl && existingImgEl.src && existingImgEl.src.length > 100) {
             preloadedImageUrl = existingImgEl.src;
         }
 
