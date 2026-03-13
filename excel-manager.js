@@ -184,10 +184,19 @@ class ExcelManager {
                                 continue;
                             }
 
-                            // ✅ Mağazayı bul (büyük/küçük harf duyarsız)
-                            const store = stores.find(s =>
-                                String(s.name || '').toLowerCase() === storeName.toLowerCase()
-                            );
+                            // ✅ Mağazayı bul (büyük/küçük harf duyarsız, slug veya ID destekli)
+                            const searchName = storeName.toLowerCase().replace('/', '');
+                            const store = stores.find(s => {
+                                const sName = String(s.name || '').toLowerCase();
+                                const sSlug = String(s.slug || '').toLowerCase().replace('/', '');
+                                const sId = String(s.id || '').toLowerCase();
+                                
+                                return sName === searchName || 
+                                       sSlug === searchName || 
+                                       sId === searchName ||
+                                       // Fazladan bir slug temizleme kontrolü (chorekchi vs corekci gibi durumlar için basit koruma)
+                                       sName.replace(/[^a-z0-9]/g, '') === searchName.replace(/[^a-z0-9]/g, '');
+                            });
 
                             if (!store) {
                                 errorCount++;
