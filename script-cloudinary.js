@@ -785,7 +785,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Eğer daha önce IDB'den farklı sayıda ürün gösterilmişse, sayfayı sessizce güncelle
                         if (freshProducts.length !== cachedProducts.length) {
                             console.log(`🔄 Yeni ürün fark edildi (IDB: ${cachedProducts.length}, Firebase: ${freshProducts.length}). UI güncelleniyor...`);
-                            renderStorePage(storeId, window._currentActiveFilter || null);
+                            renderStorePage(storeId, window._currentActiveFilter || null, true);
                         }
                     }
                 } catch (err) {
@@ -808,7 +808,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return cachedProducts;
     }
 
-    const renderStorePage = async (storeId, activeFilter = null) => {
+    const renderStorePage = async (storeId, activeFilter = null, forceRebuild = false) => {
         currentActiveFilter = activeFilter; // ✅ Global filtreyi güncelle
         window._currentActiveFilter = activeFilter; // ✅ Arka plan callback'i için de güncelle
         const store = allStores.find(s => s.id === storeId);
@@ -846,7 +846,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentStoreId = storeId;
 
         // ✅ PERFORMANS: Sadece yeni mağazada veya kartlar yokken (arka plan yüklemesi bittiyse) kartları/banner'ı oluştur
-        if (isNewStore || (hasProducts && cardsNeeded)) {
+        if (isNewStore || (hasProducts && cardsNeeded) || forceRebuild) {
             // Ürün grid'ini temizle ve göster
             if (productsGrid) {
                 productsGrid.innerHTML = '';
@@ -911,7 +911,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // ✅ TÜM ürün kartlarını bir kez oluştur (Eğer kartlar yoksa veya mağaza değiştiyse)
-        if (isNewStore || (hasProducts && cardsNeeded)) {
+        if (isNewStore || (hasProducts && cardsNeeded) || forceRebuild) {
             // ✅ PERFORMANS: Agresif Resim Yükleme Observer (800px önceden yüklemeye başla)
             let productImageObserver = null;
             if ('IntersectionObserver' in window) {
