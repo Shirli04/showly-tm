@@ -260,13 +260,15 @@ body {
     flex-direction: column;
     scroll-behavior: smooth;
     overflow-x: hidden;
-    width: 100%;
+    width: calc(100% - var(--sidebar-width));
+    min-width: 0;
 }
 
 @media (max-width: 768px) {
     .admin-main {
         margin-left: 0;
         padding-top: 0;
+        width: 100%;
     }
 }
 
@@ -377,6 +379,7 @@ body {
     flex: 1;
     padding: 30px;
     overflow-x: hidden;
+    min-width: 0;
 }
 
 @media (max-width: 768px) {
