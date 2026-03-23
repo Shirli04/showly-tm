@@ -8,20 +8,31 @@
     <!-- Font Awesome (İkonlar İçin) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
-        // Oturum kontrolü - sadece sayfa ilk yüklenirken bir kez çalışır
+        // Oturum kontrolü - admin sayfası açılır açılmaz doğrula
         (function () {
-            const adminUser = localStorage.getItem('adminUser');
+            const redirectToLogin = () => {
+                // Absolute `/login.html` yerine relatif kullan: alt dizin deploy'larında da çalışsın
+                window.location.replace('login.html');
+            };
 
-            // Eğer oturum yoksa ve login sayfasında değilsek
-            if (!adminUser && !window.location.pathname.includes('login.html')) {
-                // Sayfanın tamamen yüklenmesini bekle
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', function () {
-                        window.location.replace('/login.html');
-                    });
-                } else {
-                    window.location.replace('/login.html');
+            try {
+                const rawAdminUser = localStorage.getItem('adminUser');
+                if (!rawAdminUser) {
+                    redirectToLogin();
+                    return;
                 }
+
+                const parsedAdminUser = JSON.parse(rawAdminUser);
+                const hasValidSession = parsedAdminUser && typeof parsedAdminUser === 'object' && parsedAdminUser.username;
+
+                if (!hasValidSession) {
+                    localStorage.removeItem('adminUser');
+                    redirectToLogin();
+                }
+            } catch (error) {
+                console.warn('Geçersiz admin oturumu, login sayfasına yönlendiriliyor:', error);
+                localStorage.removeItem('adminUser');
+                redirectToLogin();
             }
         })();
     </script>

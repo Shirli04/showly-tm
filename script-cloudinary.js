@@ -58,6 +58,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     var allStores = [];
     var allProducts = [];
     var currentActiveFilter = null;
+    const FEATURED_CATEGORY_KEY = 'featured';
+    const FEATURED_CATEGORY_TITLE = 'Meşhurlar';
+    const FEATURED_CACHE_TTL = 30000;
+    const featuredProductsCache = {};
     window.isInitialLoadComplete = false;
 
     // SMS URL açma fonksiyonu
@@ -590,13 +594,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- KATEGORİ FİLTRELERİNİ OLUŞTURAN FONKSİYON (Yatay Sticky Bar) ---
-    const renderCategories = (storeId, activeFilter) => {
+    const renderCategories = (storeId, activeFilter, storeProductsArg = null, featuredProducts = []) => {
         const lang = getSelectedLang();
         const section = document.getElementById('category-filters-section');
         const container = document.getElementById('category-buttons-container');
         if (!container) return;
 
-        const storeProducts = allProducts.filter(p => p.storeId === storeId);
+        const storeProducts = Array.isArray(storeProductsArg)
+            ? storeProductsArg
+            : allProducts.filter(p => p.storeId === storeId);
 
         // Benzersiz kategorileri orijinal adlarına (category_tm) göre topla
         const categoriesMap = new Map();
@@ -612,8 +618,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Temizle
         while (container.firstChild) container.removeChild(container.firstChild);
 
+        const hasFeaturedCategory = Array.isArray(featuredProducts) && featuredProducts.length > 0;
+
         // Kategori yoksa bölümü gizle
-        if (categoriesMap.size === 0) {
+        if (categoriesMap.size === 0 && !hasFeaturedCategory) {
             if (section) section.style.display = 'none';
             return;
         }
@@ -637,6 +645,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         container.appendChild(allBtn);
 
+        // Sanal kategori listesi (özel kategori en üstte)
+        const categoryObjects = [];
+        if (hasFeaturedCategory) {
+            categoryObjects.push({
+                key: FEATURED_CATEGORY_KEY,
+                title: FEATURED_CATEGORY_TITLE,
+                products: featuredProducts
+            });
+        }
+
         // Kategori butonları
         // ✅ YENİ: Kategorileri ekranda gösterilecek ismine göre (displayCat) alfabetik sırala
         const sortedCategories = Array.from(categoriesMap.entries()).sort((a, b) => {
@@ -646,21 +664,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         sortedCategories.forEach(([baseCat, displayCat]) => {
+            categoryObjects.push({
+                key: baseCat,
+                title: displayCat,
+                products: []
+            });
+        });
+
+        categoryObjects.forEach((categoryObj) => {
             const btn = document.createElement('button');
             // Active klası orijinal isme göre kontrol edilecek
-            btn.className = 'category-chip' + (activeFilter?.type === 'CATEGORY' && activeFilter.value === baseCat ? ' active' : '');
+            btn.className = 'category-chip' + (activeFilter?.type === 'CATEGORY' && activeFilter.value === categoryObj.key ? ' active' : '');
             // Ekranda çevrilmiş isim yazacak
-            btn.textContent = displayCat;
-            btn.setAttribute('data-category-target', baseCat);
+            btn.textContent = categoryObj.title;
+            btn.setAttribute('data-category-target', categoryObj.key);
             
             // ✅ YENİ: Tıklandığında filtreleme YAPMA, kategori başlığına kaydır (Smooth Scroll)
             btn.addEventListener('click', () => {
-                const header = document.querySelector(`.category-section-header[data-category-section="${baseCat}"]`);
+                const header = document.querySelector(`.category-section-header[data-category-section="${categoryObj.key}"]`);
                 if (header) {
                     const offset = document.getElementById('category-filters-section')?.offsetHeight || 60;
                     const topPos = header.getBoundingClientRect().top + window.scrollY - offset - 10;
                     window.scrollTo({ top: topPos, behavior: 'smooth' });
-                    highlightCategoryButton(baseCat);
+                    highlightCategoryButton(categoryObj.key);
                 }
             });
             container.appendChild(btn);
@@ -668,10 +694,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // --- GENEL FİLTRELERİ OLUŞTURAN FONKSİYON ---
-    const renderMainFilters = (storeId, activeFilter) => {
+    const renderMainFilters = (storeId, activeFilter, storeProductsArg = null) => {
         const store = allStores.find(s => s.id === storeId);
 
-        const storeProducts = allProducts.filter(p => p.storeId === storeId);
+        const storeProducts = Array.isArray(storeProductsArg)
+            ? storeProductsArg
+            : allProducts.filter(p => p.storeId === storeId);
         const discountedProducts = storeProducts.filter(p => p.isOnSale);
         const expensiveProducts = storeProducts.filter(p => parseFloat(p.price.replace(' TMT', '')) > 500);
 
@@ -826,17 +854,105 @@ document.addEventListener('DOMContentLoaded', async () => {
         return cachedProducts;
     }
 
+    async function getFeaturedProductsForStore(storeId) {
+        if (!storeId || !window.db) return [];
+
+        const cached = featuredProductsCache[storeId];
+        if (cached && cached.status === 'ready' && (Date.now() - (cached.timestamp || 0) < FEATURED_CACHE_TTL)) return cached.products;
+        if (cached && cached.promise) return cached.promise;
+
+        const pendingPromise = (async () => {
+            try {
+                const storeDoc = await window.db.collection('stores').doc(storeId).get();
+                if (!storeDoc.exists) {
+                    featuredProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                    return [];
+                }
+
+                const storeData = storeDoc.data() || {};
+                const isEnabled = storeData.featuredProductsEnabled === true;
+                const rawIds = Array.isArray(storeData.featuredProductIds) ? storeData.featuredProductIds : [];
+
+                if (!isEnabled || rawIds.length === 0) {
+                    featuredProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                    return [];
+                }
+
+                const uniqueIds = [];
+                const seenIds = new Set();
+                rawIds.forEach((rawId) => {
+                    const id = typeof rawId === 'string' ? rawId.trim() : '';
+                    if (!id || seenIds.has(id)) return;
+                    seenIds.add(id);
+                    uniqueIds.push(id);
+                });
+
+                if (uniqueIds.length === 0) {
+                    featuredProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                    return [];
+                }
+
+                const productDocSnapshots = await Promise.all(
+                    uniqueIds.map((id) =>
+                        window.db.collection('products').doc(id).get().catch(() => null)
+                    )
+                );
+
+                const validProductsById = new Map();
+                productDocSnapshots.forEach((docSnap, index) => {
+                    if (!docSnap || !docSnap.exists) return;
+
+                    const productData = docSnap.data() || {};
+                    if (String(productData.storeId || '') !== String(storeId)) return;
+
+                    const productId = docSnap.id || uniqueIds[index];
+                    if (!productId || validProductsById.has(productId)) return;
+                    validProductsById.set(productId, { id: productId, ...productData });
+                });
+
+                const featuredProducts = uniqueIds
+                    .map((id) => validProductsById.get(id))
+                    .filter(Boolean);
+
+                featuredProductsCache[storeId] = { status: 'ready', products: featuredProducts, timestamp: Date.now() };
+                return featuredProducts;
+            } catch (error) {
+                console.warn('Öne çıkan ürünler alınamadı:', error);
+                featuredProductsCache[storeId] = { status: 'error', products: [], timestamp: Date.now() };
+                return [];
+            }
+        })();
+
+        featuredProductsCache[storeId] = { status: 'loading', products: [], promise: pendingPromise };
+        const products = await pendingPromise;
+        return products;
+    }
+
     const renderStorePage = async (storeId, activeFilter = null, forceRebuild = false) => {
         currentActiveFilter = activeFilter; // ✅ Global filtreyi güncelle
         window._currentActiveFilter = activeFilter; // ✅ Arka plan callback'i için de güncelle
         const store = allStores.find(s => s.id === storeId);
         if (!store) return;
 
-        // ✅ PERFORMANS: Ürünleri 'Tembel Yükleme' (Lazy Loading) yöntemiyle getir
-        let storeProducts = await getStoreProducts(storeId);
+        // ✅ PERFORMANS: Ürünleri ve öne çıkanları paralel getir
+        const [loadedStoreProducts, featuredProducts] = await Promise.all([
+            getStoreProducts(storeId),
+            getFeaturedProductsForStore(storeId)
+        ]);
+
+        let storeProducts = loadedStoreProducts;
+        if (featuredProducts.length > 0) {
+            const productsById = new Map(storeProducts.map(p => [String(p.id), p]));
+            featuredProducts.forEach((product) => {
+                const pid = String(product.id || '');
+                if (!pid || productsById.has(pid)) return;
+                productsById.set(pid, product);
+            });
+            storeProducts = Array.from(productsById.values());
+        }
 
         // Ürünler haala yoksa (ilk defa çekiliyorsa), skeleton göster ve bekle
-        const hasProducts = storeProducts.length > 0;
+        const hasProducts = storeProducts.length > 0 || featuredProducts.length > 0;
         const isNewStore = currentStoreId !== storeId;
         const cardsNeeded = productsGrid && productsGrid.querySelector('.product-card:not(.skeleton-card)') === null;
 
@@ -951,7 +1067,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isGlobalPriceSortAsc = activeFilter?.type === 'SORT_PRICE_ASC';
             const isGlobalPriceSortDesc = activeFilter?.type === 'SORT_PRICE_DESC';
 
+            const featuredOrderMap = new Map();
+            featuredProducts.forEach((product, index) => {
+                featuredOrderMap.set(String(product.id), index);
+            });
+            const featuredProductIdSet = new Set(featuredProducts.map(p => String(p.id)));
+
             const sortedProducts = [...storeProducts].sort((a, b) => {
+                const aId = String(a.id || '');
+                const bId = String(b.id || '');
+                const aFeatured = featuredProductIdSet.has(aId);
+                const bFeatured = featuredProductIdSet.has(bId);
+
+                // Öne çıkan ürünler her zaman en üstte kalır
+                if (aFeatured && !bFeatured) return -1;
+                if (!aFeatured && bFeatured) return 1;
+                if (aFeatured && bFeatured) {
+                    const aOrder = featuredOrderMap.get(aId) ?? Number.MAX_SAFE_INTEGER;
+                    const bOrder = featuredOrderMap.get(bId) ?? Number.MAX_SAFE_INTEGER;
+                    return aOrder - bOrder;
+                }
+
                 const priceA = parseFloat((a.price || '0').replace(' TMT', '')) || 0;
                 const priceB = parseFloat((b.price || '0').replace(' TMT', '')) || 0;
 
@@ -977,14 +1113,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // ✅ YENİ: Kategori Gruplamalı Ürün Listeleme - Kategori başlıkları ekle
             let lastCategoryDisplay = null;
+            let featuredHeaderRendered = false;
             const _langForHeaders = getSelectedLang();
 
             sortedProducts.forEach((product, index) => {
+                const isFeaturedProduct = featuredProductIdSet.has(String(product.id));
+
+                if (isFeaturedProduct && !featuredHeaderRendered) {
+                    const featuredHeader = document.createElement('div');
+                    featuredHeader.className = 'category-section-header';
+                    featuredHeader.setAttribute('data-category-section', FEATURED_CATEGORY_KEY);
+                    featuredHeader.innerHTML = `<h3>${FEATURED_CATEGORY_TITLE}</h3>`;
+                    productsFragment.appendChild(featuredHeader);
+                    featuredHeaderRendered = true;
+                }
+
                 // ✅ Kategori değiştiğinde başlık ekle (Sadece global fiyat sıralaması değilse)
                 const rawCat = product.category || '';
                 const displayName = getProductField(product, 'category', _langForHeaders) || rawCat;
                 
-                if (!isGlobalPriceSortAsc && !isGlobalPriceSortDesc && displayName !== lastCategoryDisplay && displayName !== '') {
+                if (!isFeaturedProduct && !isGlobalPriceSortAsc && !isGlobalPriceSortDesc && displayName !== lastCategoryDisplay && displayName !== '') {
                     const categoryHeader = document.createElement('div');
                     categoryHeader.className = 'category-section-header';
                     // Scroll-Spy için data-category-section özelliğine orijinal ismi atamak daha güvenli (butonlar orijinal isim arıyor)
@@ -1156,8 +1304,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ✅ Filtreleri her zaman göster (Mağaza içi filtreler gizlenmemeli)
         if (categoryFiltersSection) categoryFiltersSection.style.display = 'block';
         if (mainFiltersSection) mainFiltersSection.style.display = 'block';
-        renderCategories(storeId, activeFilter);
-        renderMainFilters(storeId, activeFilter);
+        renderCategories(storeId, activeFilter, storeProducts, featuredProducts);
+        renderMainFilters(storeId, activeFilter, storeProducts);
 
         // Filtrelenecek ürün ID'lerini belirle (String'e zorla)
         let visibleProductIds = new Set(storeProducts.map(p => String(p.id)));
@@ -1166,7 +1314,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             switch (activeFilter.type) {
                 case 'CATEGORY':
                     // ✅ GÜNCELLENDİ: Filtreleme artık Orijinal (BASE) kategori ismine göre yapılır
-                    visibleProductIds = new Set(storeProducts.filter(p => p.category === activeFilter.value).map(p => p.id));
+                    if (activeFilter.value === FEATURED_CATEGORY_KEY) {
+                        visibleProductIds = new Set(featuredProducts.map(p => p.id));
+                    } else {
+                        visibleProductIds = new Set(storeProducts.filter(p => p.category === activeFilter.value).map(p => p.id));
+                    }
                     break;
                 case 'DISCOUNT':
                     visibleProductIds = new Set(storeProducts.filter(p => p.isOnSale).map(p => p.id));
