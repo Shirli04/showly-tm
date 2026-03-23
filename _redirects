@@ -1,7 +1,5 @@
-/admin /login.html 200
-/login /login.html 200
+/admin /login 302
 /admin.html /admin.html 200
-/login.html /login.html 200
 
 
 /* /index.html 200
