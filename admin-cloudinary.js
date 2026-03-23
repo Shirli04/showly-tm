@@ -11,11 +11,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loadingOverlay) loadingOverlay.style.display = 'flex';
 
     // ✅ localStorage'dan kullanıcıyı al (iOS Safari uyumluluğu için)
-    const currentUser = JSON.parse(localStorage.getItem('adminUser'));
+    let currentUser = null;
+    try {
+        const parsed = JSON.parse(localStorage.getItem('adminUser'));
+        const now = Date.now();
+        const expiresAt = Number(parsed?.sessionExpiresAt || 0);
+        const hasValidSession = parsed
+            && typeof parsed === 'object'
+            && !!parsed.username
+            && Number.isFinite(expiresAt)
+            && expiresAt > now;
 
-    // Eğer kullanıcı yoksa login'e yönlendir
+        if (hasValidSession) {
+            currentUser = parsed;
+        }
+    } catch (error) {
+        console.warn('Admin oturumu okunamadı:', error);
+    }
+
+    // Eğer kullanıcı yoksa veya oturum süresi dolduysa login'e yönlendir
     if (!currentUser) {
-        window.location.replace('/login.html');
+        localStorage.removeItem('adminUser');
+        window.location.replace('login.html');
         return; // Kodun devam etmesini engelle
     }
 
