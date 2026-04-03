@@ -58,10 +58,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     var allStores = [];
     var allProducts = [];
     var currentActiveFilter = null;
+    const READY_MEAL_CATEGORY_KEY = 'ready-meals';
+    const READY_MEAL_CATEGORY_TITLE = 'Taýyn naharlar';
     const FEATURED_CATEGORY_KEY = 'featured';
     const FEATURED_CATEGORY_TITLE = 'Meşhurlar';
     const FEATURED_CACHE_TTL = 30000;
+    const READY_MEALS_CACHE_TTL = 30000;
     const featuredProductsCache = {};
+    const readyMealProductsCache = {};
     window.isInitialLoadComplete = false;
 
     // SMS URL açma fonksiyonu
@@ -594,7 +598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- KATEGORİ FİLTRELERİNİ OLUŞTURAN FONKSİYON (Yatay Sticky Bar) ---
-    const renderCategories = (storeId, activeFilter, storeProductsArg = null, featuredProducts = []) => {
+    const renderCategories = (storeId, activeFilter, storeProductsArg = null, readyMealProducts = [], featuredProducts = []) => {
         const lang = getSelectedLang();
         const section = document.getElementById('category-filters-section');
         const container = document.getElementById('category-buttons-container');
@@ -618,10 +622,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Temizle
         while (container.firstChild) container.removeChild(container.firstChild);
 
+        const hasReadyMealCategory = Array.isArray(readyMealProducts) && readyMealProducts.length > 0;
         const hasFeaturedCategory = Array.isArray(featuredProducts) && featuredProducts.length > 0;
 
         // Kategori yoksa bölümü gizle
-        if (categoriesMap.size === 0 && !hasFeaturedCategory) {
+        if (categoriesMap.size === 0 && !hasReadyMealCategory && !hasFeaturedCategory) {
             if (section) section.style.display = 'none';
             return;
         }
@@ -630,6 +635,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Sanal kategori listesi (özel kategori en üstte)
         const categoryObjects = [];
+        if (hasReadyMealCategory) {
+            categoryObjects.push({
+                key: READY_MEAL_CATEGORY_KEY,
+                title: READY_MEAL_CATEGORY_TITLE,
+                products: readyMealProducts
+            });
+        }
         if (hasFeaturedCategory) {
             categoryObjects.push({
                 key: FEATURED_CATEGORY_KEY,
@@ -640,11 +652,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Kategori butonları
         // ✅ YENİ: Kategorileri ekranda gösterilecek ismine göre (displayCat) alfabetik sırala
-        const sortedCategories = Array.from(categoriesMap.entries()).sort((a, b) => {
-            const displayA = a[1].toLowerCase();
-            const displayB = b[1].toLowerCase();
-            return displayA.localeCompare(displayB);
-        });
+        const sortedCategories = Array.from(categoriesMap.entries())
+            .filter(([baseCat, displayCat]) => {
+                if (!hasReadyMealCategory) return true;
+                return !isReadyMealCategoryName(displayCat || baseCat);
+            })
+            .sort((a, b) => {
+                const displayA = a[1].toLowerCase();
+                const displayB = b[1].toLowerCase();
+                return displayA.localeCompare(displayB);
+            });
 
         sortedCategories.forEach(([baseCat, displayCat]) => {
             categoryObjects.push({
@@ -911,6 +928,125 @@ document.addEventListener('DOMContentLoaded', async () => {
         return products;
     }
 
+    function normalizeTurkmenText(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/ä/g, 'a')
+            .replace(/[ýÿ]/g, 'y')
+            .replace(/ş/g, 's')
+            .replace(/ç/g, 'c')
+            .replace(/ö/g, 'o')
+            .replace(/ü/g, 'u')
+            .replace(/ň/g, 'n')
+            .replace(/ğ/g, 'g')
+            .replace(/ı/g, 'i')
+            .trim();
+    }
+
+    function isReadyMealCategoryName(categoryName) {
+        const normalized = normalizeTurkmenText(categoryName);
+        if (!normalized) return false;
+        return normalized.includes('tayyn nahar') || normalized.includes('hazir yemek');
+    }
+
+    function getReadyMealProductsFromStoreProducts(storeProducts) {
+        const fallbackProducts = Array.isArray(storeProducts) ? storeProducts : [];
+        return fallbackProducts.filter((product) => {
+            const categoryCandidates = [
+                product.category,
+                product.category_tm,
+                product.category_tr,
+                product.category_ru,
+                product.category_en
+            ];
+            return categoryCandidates.some((catName) => isReadyMealCategoryName(catName));
+        });
+    }
+
+    async function getReadyMealProductsForStore(storeId, storeProducts = []) {
+        if (!storeId || !window.db) return getReadyMealProductsFromStoreProducts(storeProducts);
+
+        const cached = readyMealProductsCache[storeId];
+        if (cached && cached.status === 'ready' && (Date.now() - (cached.timestamp || 0) < READY_MEALS_CACHE_TTL)) return cached.products;
+        if (cached && cached.promise) return cached.promise;
+
+        const pendingPromise = (async () => {
+            try {
+                const storeDoc = await window.db.collection('stores').doc(storeId).get();
+                if (!storeDoc.exists) {
+                    const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
+                    readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
+                    return fallback;
+                }
+
+                const storeData = storeDoc.data() || {};
+                const isEnabled = storeData.readyMealProductsEnabled === true;
+                const rawIds = Array.isArray(storeData.readyMealProductIds) ? storeData.readyMealProductIds : [];
+
+                if (!isEnabled || rawIds.length === 0) {
+                    const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
+                    readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
+                    return fallback;
+                }
+
+                const uniqueIds = [];
+                const seenIds = new Set();
+                rawIds.forEach((rawId) => {
+                    const id = typeof rawId === 'string' ? rawId.trim() : '';
+                    if (!id || seenIds.has(id)) return;
+                    seenIds.add(id);
+                    uniqueIds.push(id);
+                });
+
+                if (uniqueIds.length === 0) {
+                    const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
+                    readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
+                    return fallback;
+                }
+
+                const productDocSnapshots = await Promise.all(
+                    uniqueIds.map((id) =>
+                        window.db.collection('products').doc(id).get().catch(() => null)
+                    )
+                );
+
+                const validProductsById = new Map();
+                productDocSnapshots.forEach((docSnap, index) => {
+                    if (!docSnap || !docSnap.exists) return;
+
+                    const productData = docSnap.data() || {};
+                    if (String(productData.storeId || '') !== String(storeId)) return;
+
+                    const productId = docSnap.id || uniqueIds[index];
+                    if (!productId || validProductsById.has(productId)) return;
+                    validProductsById.set(productId, { id: productId, ...productData });
+                });
+
+                const readyMealProducts = uniqueIds
+                    .map((id) => validProductsById.get(id))
+                    .filter(Boolean);
+
+                if (readyMealProducts.length > 0) {
+                    readyMealProductsCache[storeId] = { status: 'ready', products: readyMealProducts, timestamp: Date.now() };
+                    return readyMealProducts;
+                }
+
+                const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
+                readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
+                return fallback;
+            } catch (error) {
+                console.warn('Taýyn naharlar alınamadı:', error);
+                const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
+                readyMealProductsCache[storeId] = { status: 'error', products: fallback, timestamp: Date.now() };
+                return fallback;
+            }
+        })();
+
+        readyMealProductsCache[storeId] = { status: 'loading', products: [], promise: pendingPromise };
+        const products = await pendingPromise;
+        return products;
+    }
+
     const renderStorePage = async (storeId, activeFilter = null, forceRebuild = false) => {
         currentActiveFilter = activeFilter; // ✅ Global filtreyi güncelle
         window._currentActiveFilter = activeFilter; // ✅ Arka plan callback'i için de güncelle
@@ -918,12 +1054,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!store) return;
 
         // ✅ PERFORMANS: Ürünleri ve öne çıkanları paralel getir
-        const [loadedStoreProducts, featuredProducts] = await Promise.all([
-            getStoreProducts(storeId),
+        const loadedStoreProducts = await getStoreProducts(storeId);
+        const [readyMealProducts, featuredProducts] = await Promise.all([
+            getReadyMealProductsForStore(storeId, loadedStoreProducts),
             getFeaturedProductsForStore(storeId)
         ]);
 
         let storeProducts = loadedStoreProducts;
+        if (readyMealProducts.length > 0) {
+            const productsById = new Map(storeProducts.map(p => [String(p.id), p]));
+            readyMealProducts.forEach((product) => {
+                const pid = String(product.id || '');
+                if (!pid || productsById.has(pid)) return;
+                productsById.set(pid, product);
+            });
+            storeProducts = Array.from(productsById.values());
+        }
         if (featuredProducts.length > 0) {
             const productsById = new Map(storeProducts.map(p => [String(p.id), p]));
             featuredProducts.forEach((product) => {
@@ -935,7 +1081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Ürünler haala yoksa (ilk defa çekiliyorsa), skeleton göster ve bekle
-        const hasProducts = storeProducts.length > 0 || featuredProducts.length > 0;
+        const hasProducts = storeProducts.length > 0 || readyMealProducts.length > 0 || featuredProducts.length > 0;
         const isNewStore = currentStoreId !== storeId;
         const cardsNeeded = productsGrid && productsGrid.querySelector('.product-card:not(.skeleton-card)') === null;
 
@@ -1199,6 +1345,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             let lastCategoryDisplay = null;
             const _langForHeaders = getSelectedLang();
 
+            if (readyMealProducts.length > 0) {
+                const readyMealsHeader = document.createElement('div');
+                readyMealsHeader.className = 'category-section-header';
+                readyMealsHeader.setAttribute('data-category-section', READY_MEAL_CATEGORY_KEY);
+                readyMealsHeader.innerHTML = `<h3>${READY_MEAL_CATEGORY_TITLE}</h3>`;
+                productsFragment.appendChild(readyMealsHeader);
+
+                readyMealProducts.forEach((product, index) => {
+                    const readyMealCard = createProductCard(product, index, 'ready-meal');
+                    productsFragment.appendChild(readyMealCard);
+                    updateFavoriteButton(product.id);
+                });
+            }
+
             if (featuredProducts.length > 0) {
                 const featuredHeader = document.createElement('div');
                 featuredHeader.className = 'category-section-header';
@@ -1207,7 +1367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 productsFragment.appendChild(featuredHeader);
 
                 featuredProducts.forEach((product, index) => {
-                    const featuredCard = createProductCard(product, index, 'featured');
+                    const featuredCard = createProductCard(product, readyMealProducts.length + index, 'featured');
                     productsFragment.appendChild(featuredCard);
                     updateFavoriteButton(product.id);
                 });
@@ -1228,7 +1388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     productsFragment.appendChild(categoryHeader);
                     lastCategoryDisplay = displayName;
                 }
-                const productCard = createProductCard(product, featuredProducts.length + index, 'regular');
+                const productCard = createProductCard(product, readyMealProducts.length + featuredProducts.length + index, 'regular');
                 productsFragment.appendChild(productCard); // DOM'a değil Fragment rulosuna ekle
                 updateFavoriteButton(product.id);
             });
@@ -1264,7 +1424,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // ✅ Filtreleri her zaman göster (Mağaza içi filtreler gizlenmemeli)
         if (categoryFiltersSection) categoryFiltersSection.style.display = 'block';
         if (mainFiltersSection) mainFiltersSection.style.display = 'block';
-        renderCategories(storeId, activeFilter, storeProducts, featuredProducts);
+        renderCategories(storeId, activeFilter, storeProducts, readyMealProducts, featuredProducts);
         renderMainFilters(storeId, activeFilter, storeProducts);
 
         // Filtrelenecek ürün ID'lerini belirle (String'e zorla)
@@ -1274,7 +1434,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             switch (activeFilter.type) {
                 case 'CATEGORY':
                     // ✅ GÜNCELLENDİ: Filtreleme artık Orijinal (BASE) kategori ismine göre yapılır
-                    if (activeFilter.value === FEATURED_CATEGORY_KEY) {
+                    if (activeFilter.value === READY_MEAL_CATEGORY_KEY) {
+                        visibleProductIds = new Set(readyMealProducts.map(p => p.id));
+                    } else if (activeFilter.value === FEATURED_CATEGORY_KEY) {
                         visibleProductIds = new Set(featuredProducts.map(p => p.id));
                     } else {
                         visibleProductIds = new Set(storeProducts.filter(p => p.category === activeFilter.value).map(p => p.id));
@@ -1311,10 +1473,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         allCards.forEach(card => {
             const productId = String(card.getAttribute('data-product-id'));
             const renderContext = card.getAttribute('data-render-context') || 'regular';
-            const isFeaturedOnlyFilter = activeFilter?.type === 'CATEGORY' && activeFilter.value === FEATURED_CATEGORY_KEY;
-            const shouldHideForContext = isFeaturedOnlyFilter
-                ? renderContext !== 'featured'
-                : (!!activeFilter && renderContext === 'featured');
+            const isSpecialCategoryFilter = activeFilter?.type === 'CATEGORY' &&
+                (activeFilter.value === FEATURED_CATEGORY_KEY || activeFilter.value === READY_MEAL_CATEGORY_KEY);
+            const expectedSpecialContext = activeFilter?.value === READY_MEAL_CATEGORY_KEY ? 'ready-meal' : 'featured';
+            const isSpecialCard = renderContext === 'featured' || renderContext === 'ready-meal';
+            const shouldHideForContext = isSpecialCategoryFilter
+                ? renderContext !== expectedSpecialContext
+                : (!!activeFilter && isSpecialCard);
 
             if (!shouldHideForContext && visibleProductIds.has(productId)) {
                 card.style.display = '';

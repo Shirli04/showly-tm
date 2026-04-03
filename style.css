@@ -1647,11 +1647,17 @@ header {
 
 .product-detail-image {
     flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .product-detail-image img {
     width: 100%;
+    max-width: 420px;
+    max-height: 55vh;
     border-radius: 8px;
+    object-fit: contain;
 }
 
 .product-detail-info {
@@ -2303,6 +2309,10 @@ header {
         height: auto;
     }
 
+    .product-detail-image img {
+        max-height: 40vh;
+    }
+
     .product-detail-info h2 {
         font-size: 20px;
     }
@@ -2435,6 +2445,10 @@ header {
         padding: 15px;
         gap: 15px;
         margin: 10px auto;
+    }
+
+    .product-detail-image img {
+        max-height: 34vh;
     }
 
     .product-detail-image,
