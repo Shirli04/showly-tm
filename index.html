@@ -5,23 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Showly</title>
-    <link rel="icon"
-        href="https://res.cloudinary.com/domv6ullp/image/upload/v1765385200/logo_e_background_removal_b_rgb_FFFFFF_f_png_vjwprg.png">
-
-    <!-- ✅ HİZ OPTİMİZASYONU: Resim sunucusuna önceden DNS ve TLS bağlantısı kur (Yüklemeyi 200-300ms hızlandırır) -->
-    <link rel="preconnect" href="https://img.showlytm.store" crossorigin>
-    <link rel="dns-prefetch" href="https://img.showlytm.store">
-
-    <!-- ✅ PRELOAD: Kritik kaynakları önceden yükle -->
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-
-    <!-- Font Awesome: Non-Blocking (Render-Blocking engelini kaldırır) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"
-        media="print" onload="this.media='all'">
-    <noscript>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    </noscript>
+    <link rel="icon" href="/assets/logo.png">
+    <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
 
     <link rel="stylesheet" href="/style.css">
     <style>
@@ -128,8 +113,7 @@
             </button>
             <div class="logo">
                 <a href="#" id="logo-link">
-                    <img src="https://res.cloudinary.com/domv6ullp/image/upload/v1765385200/logo_e_background_removal_b_rgb_FFFFFF_f_png_vjwprg.png"
-                        alt="Showly Logo" class="header-logo">
+                    <img src="/assets/logo.png" alt="Showly Logo" class="header-logo">
                     <h1 class="logo-text"></h1>
                 </a>
             </div>
@@ -571,16 +555,13 @@
             </div>
         </div>
 
-        <!-- Firebase Compat SDK -->
-        <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-        <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-
         <script defer src="/firebase-config.js"></script>
+        <script defer src="/r2-config.js"></script>
         <!-- ✅ YENİ: Çok dilli destek modülü -->
         <script defer src="/language.js"></script>
 
         <!-- Ana Script -->
-        <script defer src="/script-cloudinary.js"></script>
+        <script defer src="/script.js"></script>
 </body>
 
 </html>

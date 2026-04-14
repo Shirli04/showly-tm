@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Eğer kullanıcı yoksa login'e yönlendir
     if (!currentUser) {
         sessionStorage.removeItem('adminUser');
+        sessionStorage.removeItem('adminToken');
+        localStorage.removeItem('adminToken');
         window.location.replace('/login');
         return; // Kodun devam etmesini engelle
     }
@@ -157,15 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Kategori elemanları (iki seviyeli sistem)
     const storeCategorySelect = document.getElementById('store-category');
 
-    // Excel export/import
-    const exportProductsBtn = document.getElementById('export-products-btn');
-    const importProductsBtn = document.getElementById('import-products-btn');
-    const importProductsInput = document.getElementById('import-products-input');
-
-    const exportStoresBtn = document.getElementById('export-stores-btn');
-    const importStoresBtn = document.getElementById('import-stores-btn');
-    const importStoresInput = document.getElementById('import-stores-input');
-
     // Dosya yükleme
     const productImage = document.getElementById('product-image');
     const productImagePreview = document.getElementById('product-image-preview');
@@ -239,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // HTTP'yi HTTPS'e zorla
         if (url.startsWith('http://')) url = url.replace('http://', 'https://');
 
-        // Cloudflare R2 veya diğer URL'leri olduğu gibi döndür (HTTPS zorunlu)
+        // Uzak URL verilirse oldugu gibi dondur, local dosyalarda relatif yol kullan
         return url;
     }
     const processPendingOrders = () => {
@@ -295,12 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- YÜKLEME FONKSİYONLARI ---
-
-    // Backup butonları
-    document.getElementById('backup-excel-btn')?.addEventListener('click', () => {
-        exportAndBackupToExcel();
-        showNotification('Excel yedek oluşturuldu!');
-    });
 
     // Ürün resmi önizleme
     productImage.addEventListener('change', (e) => {
@@ -620,29 +607,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // Google Sheets’e satır ekleme
-    async function appendToSheet(sheetId, range, rowArray) {
-        const token = gapi.auth.getToken()?.access_token;
-        if (!token) { alert('Google ile giriş yapmalısın!'); return false; }
-
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}:append?valueInputOption=RAW`;
-        const body = { values: [rowArray] };
-
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
-
-        if (!res.ok) {
-            console.error('Sheet yazma hatası:', await res.text());
-            return false;
-        }
-        return true;
-    }
     // Mağaza olay dinleyicileri
     const attachStoreEventListeners = () => {
         document.querySelectorAll('.edit-store').forEach(button => {
@@ -1462,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         productModal.style.display = 'block';
     };
 
-    // Ürün form submit (FIREBASE + Cloudinary)
+        // Ürün form submit
     const handleProductSubmit = async (e) => {
         e.preventDefault();
         if (isSubmitting) return;
@@ -1492,7 +1456,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let imageUrl = uploadedProductImageUrl; // Mevcut resmi koru
             if (file) {
-                showUploadStatus(productImageStatus, 'Resim Cloudflare R2\'ye yükleniyor...', true);
+                showUploadStatus(productImageStatus, 'Resim sunucuya yükleniyor...', true);
 
                 // Mağaza ismini dropdown'dan al (R2 klasörleme için)
                 const storeSelect = document.getElementById('product-store');
@@ -1782,72 +1746,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('total-orders').textContent = '0';
         }
     };
-
-
-
-    // --- EXCEL FONKSİYONLARI ---
-    // Ürünleri Excel'e indir
-    if (exportProductsBtn) {
-        exportProductsBtn.addEventListener('click', () => {
-            ExcelManager.exportProductsToExcel();
-            showNotification('Ürünler indirildi!');
-        });
-    }
-
-    // Excel'den ürün yükle
-    if (importProductsBtn) {
-        importProductsBtn.addEventListener('click', () => {
-            importProductsInput.click();
-        });
-    }
-
-    if (importProductsInput) {
-        importProductsInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                try {
-                    const result = await ExcelManager.importProductsFromExcel(file);
-                    showNotification(result.message);
-                    renderProductsTable();
-                    updateDashboard();
-                } catch (error) {
-                    showNotification('Hata: ' + (error.error || error.message), false);
-                }
-            }
-        });
-    }
-
-    // Mağazaları Excel'e indir
-    if (exportStoresBtn) {
-        exportStoresBtn.addEventListener('click', () => {
-            ExcelManager.exportStoresToExcel();
-            showNotification('Mağazalar indirildi!');
-        });
-    }
-
-    // Excel'den mağaza yükle
-    if (importStoresBtn) {
-        importStoresBtn.addEventListener('click', () => {
-            importStoresInput.click();
-        });
-    }
-
-    if (importStoresInput) {
-        importStoresInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                try {
-                    const result = await ExcelManager.importStoresFromExcel(file);
-                    showNotification(result.message);
-                    renderStoresTable();
-                    updateDashboard();
-                } catch (error) {
-                    showNotification('Hata: ' + (error.error || error.message), false);
-                }
-            }
-        });
-    }
-
     // Mağaza seçimini doldur
     async function populateStoreSelect() {
         try {
@@ -2500,20 +2398,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 try {
-                    // Şifreyi hash'le (Salt round: 10)
-                    const bcryptObj = window.bcrypt || (window.dcodeIO && window.dcodeIO.bcrypt);
-                    let passwordToStore = password;
-
-                    if (bcryptObj) {
-                        const salt = bcryptObj.genSaltSync(10);
-                        passwordToStore = bcryptObj.hashSync(password, salt);
-                    } else {
-                        console.error('Bcrypt library not loaded! Storing plain-text (NOT RECOMMENDED)');
-                    }
-
                     await window.db.collection('users').add({
                         username,
-                        password: passwordToStore,
+                        password,
                         role,
                         permissions,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2551,6 +2438,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 // ✅ sessionStorage'dan temizle
                 sessionStorage.removeItem('adminUser');
+                sessionStorage.removeItem('adminToken');
+                localStorage.removeItem('adminToken');
                 // ✅ replace kullan (geri tuşuyla dönmeyi engeller)
                 window.location.replace('login.html');
             });
@@ -3323,6 +3212,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+    // Magaza ekle
+    window.addStoreToFirebase = async function (store) {
+        const doc = await window.db.collection('stores').add({
+            ...store,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return { id: doc.id, ...store };
+    };
+
     // Ürün ekle (Firestore)
     window.addProductToFirebase = async function (product) {
         const doc = await window.db.collection('products').add({
@@ -3375,14 +3273,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (loadingOverlay) loadingOverlay.style.display = 'none'; // Tam ekran loading iptal, skeleton kullanılacak
 
         try {
-            console.log('🔄 Veriler Firebase\'den yükleniyor (admin)...');
+            console.log('🔄 Veriler local API\'den yükleniyor (admin)...');
             window.showDashboardSkeleton();
             window.showTableSkeleton('stores-table-body', 5, 5);
             window.showTableSkeleton('products-table-body', 6, 6);
             window.showTableSkeleton('orders-table-body', 9, 5);
 
-            // Firebase'den veri çekme (Birincil Kaynak)
-            const fetchFirebase = async () => {
+            const fetchPrimary = async () => {
                 const results = await Promise.allSettled([
                     window.db.collection('stores').get(),
                     window.db.collection('products').get(),
@@ -3397,50 +3294,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error('⚠️ Siparişler (Permissions) Hatası:', results[2].reason);
                 }
 
-                return { stores, products, orders, source: 'Firebase' };
-            };
-
-            // Worker'dan veri çekme (Sadece Stores ve Products için Yedek)
-            const fetchWorker = async () => {
-                const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-                try {
-                    const response = await fetch(WORKER_URL, {
-                        method: 'GET', mode: 'cors', cache: 'no-cache'
-                    });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const data = await response.json();
-
-                    return {
-                        stores: data.stores || [],
-                        products: data.allProducts || data.products || [],
-                        orders: [], // Worker sipariş taşımaz
-                        source: 'Worker'
-                    };
-                } catch (e) {
-                    console.error('Worker Fallback Hatası:', e);
-                    throw e;
-                }
+                return { stores, products, orders, source: 'Local API' };
             };
 
             let result;
             try {
-                // Öncelik Firebase'de ama çok yavaşsa Worker devreye girsin diye bir yarış başlatılabilir
-                // Ancak Admin panelinde DOĞRU veri (Firebase) her zaman önceliklidir.
-                result = await fetchFirebase();
-
-                // Eğer Firebase kritik verileri (stores/products) boş döndüyse ve Worker varsa yedekle
-                if (result.stores.length === 0 && result.products.length === 0) {
-                    console.warn('⚠️ Firebase boş döndü, Worker deneniyor...');
-                    const workerResult = await fetchWorker().catch(() => null);
-                    if (workerResult) {
-                        result.stores = workerResult.stores;
-                        result.products = workerResult.products;
-                        result.source = 'Firebase + Worker';
-                    }
-                }
+                result = await fetchPrimary();
             } catch (err) {
-                console.error('Firebase ana veri yükleme hatası:', err);
-                result = await fetchWorker().catch(() => ({ stores: [], products: [], orders: [], source: 'Error' }));
+                console.error('Local API ana veri yükleme hatası:', err);
+                result = { stores: [], products: [], orders: [], source: 'Error' };
             }
 
             console.log(`✅ Admin verileri yüklendi (KAYNAK: ${result.source})`);

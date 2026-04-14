@@ -5,9 +5,11 @@ const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
     '/style.css',
-    '/script-cloudinary.js',
+    '/assets/logo.png',
+    '/script.js',
     '/firebase-config.js',
-    'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css'
+    '/r2-config.js',
+    '/vendor/fontawesome/css/all.min.css'
 ];
 
 // Install Event: Cache essential files
@@ -44,7 +46,6 @@ self.addEventListener('fetch', event => {
     if (
         event.request.method !== 'GET' ||
         !event.request.url.startsWith('http') ||
-        event.request.url.includes('firestore.googleapis.com') ||
         event.request.url.includes('google.com') ||
         event.request.url.includes('cloudflareinsights.com')
     ) {
@@ -52,8 +53,7 @@ self.addEventListener('fetch', event => {
     }
 
     // ✅ ÜRÜN RESİMLERİ: Cache-First Stratejisi (Önce cache'ten ver, arka planda güncelle)
-    if (event.request.url.includes('img.showlytm.store') || 
-        (event.request.url.includes('cdn-cgi/image') && event.request.url.includes('img.showlytm.store'))) {
+    if (event.request.url.includes('/uploads/')) {
         event.respondWith(
             caches.open(IMG_CACHE_NAME).then(async cache => {
                 const cachedResponse = await cache.match(event.request);

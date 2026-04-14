@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Showly</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="/assets/logo.png">
+    <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -125,8 +126,7 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <img src="https://res.cloudinary.com/djp98v5ku/image/upload/v1700000000/logos/showly-logo.png"
-                alt="Showly Logo" onerror="this.style.display='none'">
+            <img src="/assets/logo.png" alt="Showly Logo">
             <h2>Showly Admin</h2>
             <p>Hoş geldiňiz!</p>
         </div>
@@ -144,9 +144,6 @@
         </form>
     </div>
 
-    <script src="https://unpkg.com/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script>
         const loginForm = document.getElementById('login-form');
@@ -166,61 +163,25 @@
             errorMessage.style.display = 'none'; // Önceki hata mesajını gizle
 
             try {
-                // ✅ Firebase hazır mı kontrol et (özellikle yavaş ağlarda önemli)
-                if (!window.db) {
-                    throw new Error('DB_NOT_READY');
-                }
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000);
 
-                // ✅ 20 saniye zaman aşımı (iPhone ve yavaş ağlar için)
-                const loginTimeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('TIMEOUT')), 20000)
-                );
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    signal: controller.signal
+                });
 
-                // Kullanıcıyı username ile ara
-                const fetchUser = window.db.collection('users')
-                    .where('username', '==', username)
-                    .get();
+                clearTimeout(timeoutId);
 
-                // Yarış: Hangisi önce biterse
-                const usersSnapshot = await Promise.race([fetchUser, loginTimeout]);
+                const payload = await response.json().catch(() => ({}));
 
-                let isValid = false;
-                let userData = null;
-
-                if (!usersSnapshot.empty) {
-                    const userDoc = usersSnapshot.docs[0];
-                    userData = userDoc.data();
-
-                    // ✅ Şifre doğrula (bcrypt hash veya düz metin)
-                    try {
-                        const bcryptObj = window.bcrypt || (window.dcodeIO && window.dcodeIO.bcrypt);
-
-                        // Şifrenin bcrypt hash olup olmadığını kontrol et ($2 ile başlıyorsa hash)
-                        if (bcryptObj && userData.password && userData.password.startsWith('$2')) {
-                            try {
-                                isValid = bcryptObj.compareSync(password, userData.password);
-                            } catch (bcryptErr) {
-                                console.warn('bcrypt hatası, düz metin karşılaştırılıyor:', bcryptErr);
-                                isValid = (password === userData.password);
-                            }
-                        } else {
-                            // Düz metin karşılaştırması
-                            isValid = (password === userData.password);
-                        }
-                    } catch (passErr) {
-                        console.warn('Şifre doğrulama hatası:', passErr);
-                        isValid = (password === userData.password);
-                    }
-                } else {
-                    // Kullanıcı bulunamadı durumu doğrudan loglanıp isValid = false olarak bırakılır
-                    console.warn(`[Giriş] Kullanıcı bulunamadı: ${username}`);
-                }
-
-                if (!isValid) {
+                if (!response.ok) {
                     submitBtn.innerHTML = '<i class="fas fa-times-circle"></i> Ýalňyş giriş!';
                     submitBtn.style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
 
-                    errorMessage.textContent = 'Adyňyz ýada koduňyz ýalňyş!';
+                    errorMessage.textContent = payload.message || 'Adyňyz ýada koduňyz ýalňyş!';
                     errorMessage.style.display = 'block';
 
                     setTimeout(() => {
@@ -237,11 +198,12 @@
                 submitBtn.style.background = 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)';
 
                 // ✅ sessionStorage kullan (sekme kapanınca oturum biter)
+                sessionStorage.setItem('adminToken', payload.token);
                 sessionStorage.setItem('adminUser', JSON.stringify({
-                    id: usersSnapshot.docs[0].id,
-                    username: userData.username,
-                    role: userData.role,
-                    permissions: userData.permissions || []
+                    id: payload.user.id,
+                    username: payload.user.username,
+                    role: payload.user.role,
+                    permissions: payload.user.permissions || []
                 }));
 
                 setTimeout(() => {
@@ -254,23 +216,18 @@
                 let errorText = 'Giriş wagtynda bir hata ýüze çykdy. Täzeden synanyşyň.';
                 let btnIcon = 'fa-exclamation-triangle';
 
-                if (error.message === 'TIMEOUT') {
+                if (error.name === 'AbortError' || error.message === 'TIMEOUT') {
                     errorText = 'Baglanyşyk wagt geçdi (20s). WiFi ýa-da internet baglanyşygyňyzy barlaň we täzeden synanyşyň.';
                     btnIcon = 'fa-clock';
-                } else if (error.message === 'DB_NOT_READY') {
-                    errorText = 'Maglumat bazasy ýüklenmedi. Sahypany täzeläň.';
-                    btnIcon = 'fa-database';
                 } else if (
-                    error.message.includes('reach Cloud Firestore') ||
-                    error.message.includes('unavailable') ||
                     error.message.includes('network') ||
                     error.message.includes('offline') ||
                     error.code === 'unavailable'
                 ) {
-                    errorText = 'Internet baglanyşygy ýok ýa-da Firebase elýeterli däl. WiFi barlaň.';
+                    errorText = 'Internet baglanyşygy ýok ýa-da server elýeterli däl. WiFi barlaň.';
                     btnIcon = 'fa-wifi';
                 } else if (error.message.includes('permission') || error.code === 'permission-denied') {
-                    errorText = 'Firebase rugsat hatasy. Administratora habar beriň.';
+                    errorText = 'Rugsat hatasy. Administratora habar beriň.';
                     btnIcon = 'fa-lock';
                 }
 

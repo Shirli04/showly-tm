@@ -363,11 +363,17 @@ body {
     align-items: center;
 }
 
-.admin-info img {
+.admin-avatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
     margin-right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1f2937, #4b5563);
+    color: #fff;
+    font-weight: 700;
 }
 
 .admin-info span {

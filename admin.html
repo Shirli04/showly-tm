@@ -5,19 +5,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Paneli</title>
-    <!-- Font Awesome (İkonlar İçin) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="/assets/logo.png">
+    <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
     <script>
         // Oturum kontrolü - admin sayfası açılır açılmaz doğrula
         (function () {
             const redirectToLogin = () => {
-                // Cloudflare Pages'te .html canonical redirect döngülerini önlemek için uzantısız yol
+                // Uzantisiz yol kullan
                 window.location.replace('/login');
             };
 
             try {
                 const rawAdminUser = sessionStorage.getItem('adminUser');
-                if (!rawAdminUser) {
+                const rawAdminToken = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken');
+                if (!rawAdminUser || !rawAdminToken) {
                     redirectToLogin();
                     return;
                 }
@@ -27,11 +28,15 @@
 
                 if (!hasValidSession) {
                     sessionStorage.removeItem('adminUser');
+                    sessionStorage.removeItem('adminToken');
+                    localStorage.removeItem('adminToken');
                     redirectToLogin();
                 }
             } catch (error) {
                 console.warn('Geçersiz admin oturumu, login sayfasına yönlendiriliyor:', error);
                 sessionStorage.removeItem('adminUser');
+                sessionStorage.removeItem('adminToken');
+                localStorage.removeItem('adminToken');
                 redirectToLogin();
             }
         })();
@@ -93,39 +98,6 @@
             }
         }
 
-        .export-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .btn-export {
-            background-color: #28a745;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-export:hover {
-            background-color: #218838;
-        }
-
-        .file-input-wrapper {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-        }
-
-        .file-input-wrapper input[type=file] {
-            position: absolute;
-            left: -9999px;
-        }
     </style>
 </head>
 
@@ -183,7 +155,7 @@
                 </div>
                 <div class="header-right">
                     <div class="admin-info">
-                        <img src="https://picsum.photos/seed/admin/40/40.jpg" alt="Admin">
+                        <span class="admin-avatar">AD</span>
                         <span>Admin</span>
                     </div>
                 </div>
@@ -333,15 +305,6 @@
                             </select>
                         </div>
                     </div>
-                    <div class="export-buttons">
-                        <button class="btn-export" id="export-products-btn">
-                            <i class="fas fa-download"></i> Excel al
-                        </button>
-                        <button class="btn-export" id="import-products-btn" style="background-color: #17a2b8;">
-                            <i class="fas fa-upload"></i> Excel'den goş
-                        </button>
-                        <input type="file" id="import-products-input" accept=".xlsx,.xls" style="display: none;">
-                    </div>
                     <div class="table-container">
                         <table class="admin-table">
                             <thead>
@@ -410,14 +373,6 @@
                                     <span>Kategorileri Müşterilerden Gizle (Sadece Mağazalar Görünür)</span>
                                 </label>
                             </div>
-                            <div class="backup-section">
-                                <h3>Yedek Oluştur</h3>
-                                <p>Mağaza ve ürün verilerinizi indir ve yedekle</p>
-                                <button class="btn-primary" id="backup-excel-btn">
-                                    <i class="fas fa-download"></i> Excel Yedek Al
-                                </button>
-                            </div>
-
                             <!-- ✅ YENİ: Mağaza Ürünlerini Toplu Silme -->
                             <div class="backup-section"
                                 style="border-color: #e74c3c; background: #fff5f5; margin-top: 20px;">
@@ -1078,27 +1033,13 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
-    <script src="excel-manager.js"></script>
-
-    <!-- Firebase Compat SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
     <script src="r2-config.js"></script>
-    <!-- Gerekli Kütüphaneler -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="admin.css">
-
-    <!-- Google Drive API -->
-    <script src="https://apis.google.com/js/api.js"></script>
-
-    <!-- Chart.js Kütüphanesi -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/vendor/chart.js/dist/chart.umd.js"></script>
 
     <!-- Diğer Scriptleriniz (Versiyon Parametresi İLE) -->
-    <script src="admin-cloudinary.js"></script>
+    <script src="admin.js"></script>
 </body>
 
 </html>

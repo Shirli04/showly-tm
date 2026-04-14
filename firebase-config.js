@@ -1,353 +1,293 @@
-// 🛑 PROFESYONEL GÖRÜNÜM: Canlı sunucuda tüm konsol çıktılarını gizle
-if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    console.log = function() {};
-    console.info = function() {};
-    console.warn = function() {};
-    console.error = function() {};
-    console.debug = function() {};
-}
+// Local API compatibility layer replacing Firebase/Firestore.
+(function () {
+    'use strict';
 
-// Firebase "Compat" SDK'sı ile yapılandırma
-const firebaseConfig = {
-    apiKey: "AIzaSyAGnYprUlgaZjiIyODbdqZVJzqvZ8iGO2g",
-    authDomain: "showlytm-04.firebaseapp.com",
-    projectId: "showlytm-04",
-    storageBucket: "showlytm-04.firebasestorage.app",
-    appId: "1:929629780738:web:b965afeed4d6bec32d601b"
-};
-
-// Firebase'i Başlat
-if (typeof firebase !== 'undefined') {
-    // Çift başlatmayı önle
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-    }
-
-    // Firestore Veritabanına Erişim
-    const db = firebase.firestore();
-
-    // Veritabanını (db) diğer scriptlerin kullanabileceği yap
-    window.db = db;
-
-    // ✅ PERFORMANS: Ayarları sadece bir kez uygula
-    if (!window._firestoreConfigured) {
-        try {
-            db.settings({
-                cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
-                ignoreUndefinedProperties: true,
-                experimentalForceLongPolling: true,
-                useFetchStreams: false,
-                merge: true
-            });
-            window._firestoreConfigured = true;
-            console.log('🚀 Firestore: Yapılandırma tamamlandı');
-        } catch (e) {
-            window._firestoreConfigured = true;
-            console.log('ℹ️ Firestore: Ayarlar zaten uygulanmış.');
-        }
-
-        // ✅ Çevrimdışı Kalıcılığı Etkinleştir
-        // iPhone iOS Safari'de IndexedDB kısıtlamaları olabilir, bu yüzden hataları tamamen sessizce geçir
-        try {
-            db.enablePersistence({ synchronizeTabs: false }) // iOS'ta synchronizeTabs sorun çıkarabilir
-                .then(() => {
-                    console.log('✅ Firestore offline persistence aktif');
-                })
-                .catch((err) => {
-                    if (err.code === 'failed-precondition') {
-                        console.warn('⚠️ Persistence: Birden fazla sekme açık, devre dışı');
-                    } else if (err.code === 'unimplemented') {
-                        console.warn('⚠️ Persistence: Bu tarayıcı desteklemiyor (iOS Private Mode olabilir)');
-                    } else {
-                        console.warn('⚠️ Persistence hatası (kritik değil):', err.code);
-                    }
-                    // ❌ Önemli: reject edilse bile Firestore normal çalışmaya devam eder
-                });
-        } catch (pErr) {
-            console.warn('⚠️ Persistence başlatma hatası (kritik değil):', pErr);
-        }
-    }
-} else {
-    console.error('❌ Firebase SDK yüklenemedi! İnternet bağlantınızı veya CDN linklerini kontrol edin.');
-    window.db = null;
-}
-
-// localStorage ve Firebase senkronizasyonu
-class ShowlyDB {
-    constructor() {
-        // Artık localStorage'a ihtiyacımız yok, veriler Firebase'de
-    }
-
-    // --- MAĞAZA FONKSİYONLARI (Firestore ile) ---
-
-    // Tüm mağazaları getir
-    async getStores() {
-        if (!window.db) return [];
-        const snapshot = await window.db.collection('stores').get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
-    // Yeni mağaza ekle
-    async addStore(store) {
-        if (!window.db) return null;
-        const slug = store.name
-            .toLowerCase()
-            .replace(/[^a-z0-9çğıöşü]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-
-        const newStore = {
-            name: store.name,
-            slug: slug,
-            description: store.description,
-            category: store.category || '', // ✅ YENİ
-            customBannerText: store.customBannerText || '',
-            tiktok: store.tiktok || '',
-            instagram: store.instagram || '',
-            phone: store.phone || '',
-            location: store.location || '',
-            createdAt: new Date().toISOString()
-        };
-
-        const docRef = await window.db.collection('stores').add(newStore);
-        console.log('Mağaza Firebase\'ye eklendi, ID:', docRef.id, 'phone:', store.phone, 'location:', store.location);
-        return { id: docRef.id, ...newStore };
-    }
-
-    // Mağazayı güncelle
-    async updateStore(storeId, updates) {
-        if (!window.db) return null;
-        await window.db.collection('stores').doc(storeId).update(updates);
-        const updatedDoc = await window.db.collection('stores').doc(storeId).get();
-        console.log('Mağaza güncellendi:', updatedDoc.id);
-        return { id: updatedDoc.id, ...updatedDoc.data() };
-    }
-
-    // Mağazayı sil
-    async deleteStore(storeId) {
-        if (!window.db) return;
-        const batch = window.db.batch();
-
-        // Önce o mağazaya ait ürünleri sil
-        const productsSnapshot = await window.db.collection('products').where('storeId', '==', storeId).get();
-        productsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-
-        // Mağazayı sil
-        batch.delete(window.db.collection('stores').doc(storeId));
-
-        await batch.commit();
-        console.log('Mağaza ve ürünleri silindi:', storeId);
-    }
-
-    // --- ÜRÜN FONKSİYONLARI (Firestore ile) ---
-
-    // Mağazaya göre ürünleri getir
-    async getProductsByStoreId(storeId) {
-        if (!window.db) return [];
-        const snapshot = await window.db.collection('products').where('storeId', '==', storeId).get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
-    // Tüm ürünleri getir
-    async getAllProducts() {
-        if (!window.db) return [];
-        const snapshot = await window.db.collection('products').get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
-    // ID'ye göre ürünü getir
-    async getProductById(productId) {
-        if (!window.db) return null;
-        const doc = await window.db.collection('products').doc(productId).get();
-        if (doc.exists) {
-            return { id: doc.id, ...doc.data() };
-        }
-        return null;
-    }
-
-    // Yeni ürün ekle
-    async addProduct(product) {
-        if (!window.db) return null;
-        const newProduct = {
-            storeId: product.storeId,
-            title: product.title,
-            price: product.price,
-            description: product.description,
-            material: product.material,
-            category: product.category,
-            isOnSale: product.isOnSale || false,
-            originalPrice: product.originalPrice || '',
-            imageUrl: product.imageUrl,
-            imagePublicId: product.imagePublicId,
-            variants: product.variants || [],
-            createdAt: new Date().toISOString()
-        };
-        const docRef = await window.db.collection('products').add(newProduct);
-        console.log('Ürün Firebase\'ye eklendi, ID:', docRef.id);
-        return { id: docRef.id, ...newProduct };
-    }
-
-    // Ürünü güncelle
-    async updateProduct(productId, updates) {
-        if (!window.db) return null;
-        await window.db.collection('products').doc(productId).update(updates);
-        const updatedDoc = await window.db.collection('products').doc(productId).get();
-        console.log('Ürün güncellendi:', updatedDoc.id);
-        return { id: updatedDoc.id, ...updatedDoc.data() };
-    }
-
-    // Ürünü sil
-    async deleteProduct(productId) {
-        if (!window.db) return;
-        await window.db.collection('products').doc(productId).delete();
-        console.log('Ürün silindi:', productId);
-    }
-
-    // --- SİPARİŞ FONKSİYONLARI (Firestore ile) ---
-
-    // Siparişleri getir
-    async getOrders() {
-        if (!window.db) return [];
-        const snapshot = await window.db.collection('orders').orderBy('date', 'desc').get();
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
-    // Sipariş ekle
-    async addOrder(order) {
-        if (!window.db) return null;
-        const newOrder = {
-            customer: order.customer,
-            date: new Date().toISOString(),
-            total: order.total,
-            status: 'pending',
-            items: order.items
-        };
-        const docRef = await window.db.collection('orders').add(newOrder);
-        console.log('Sipariş Firebase\'ye eklendi, ID:', docRef.id);
-        return { id: docRef.id, ...newOrder };
-    }
-}
-
-// ✅ YENİ: Varsayılan kategorileri ekle (ilk kurulumda)
-async function initializeCategories() {
-    if (!window.db) return;
-    try {
-        const categoriesSnapshot = await db.collection('categories').get();
-        console.log('✅ Kategori sistemi hazır');
-    } catch (e) {
-        console.log('Kategori sistemi yüklenemedi:', e.message);
-    }
-}
-
-// Sayfa yüklenince kategorileri kontrol et
-initializeCategories();
-
-// Global DB instance'ını oluştur
-window.showlyDB = new ShowlyDB();
-
-// ==================== MAĞAZA VE ÜRÜN EKLEMİ FONKSİYONLARI ====================
-
-// Mağaza ekle (Firestore)
-window.addStoreToFirebase = async function (store) {
-    if (!window.db) return null;
-    const slug = store.name
-        .toLowerCase()
-        .replace(/ç/g, 'c')
-        .replace(/ğ/g, 'g')
-        .replace(/ı/g, 'i')
-        .replace(/ö/g, 'o')
-        .replace(/ş/g, 's')
-        .replace(/ü/g, 'u')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-
-    const doc = await window.db.collection('stores').add({
-        name: store.name,
-        slug: slug,
-        description: store.description || '',
-        category: store.category || '',
-        customBannerText: store.customBannerText || '',
-        tiktok: store.tiktok || '',
-        instagram: store.instagram || '',
-        phone: store.phone || '',
-        location: store.location || '',
-        orderPhone: store.orderPhone || '',
-        hasReservation: store.hasReservation || false, // ✅ YENİ
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    console.log('✅ Mağaza Firebase\'e eklendi, ID:', doc.id, 'phone:', store.phone, 'location:', store.location, 'orderPhone:', store.orderPhone);
-    return {
-        id: doc.id,
-        name: store.name,
-        slug,
-        description: store.description,
-        category: store.category,
-        customBannerText: store.customBannerText,
-        tiktok: store.tiktok,
-        instagram: store.instagram,
-        phone: store.phone,
-        location: store.location,
-        orderPhone: store.orderPhone,
-        hasReservation: store.hasReservation || false // ✅ YENİ
+    const API_MAP = {
+        stores: '/api/stores',
+        products: '/api/products',
+        orders: '/api/orders',
+        users: '/api/users',
+        parentCategories: '/api/categories/parents',
+        subcategories: '/api/categories/subcategories',
+        reservationPackages: '/api/reservation-packages',
+        settings: '/api/settings',
+        categories: '/api/categories/legacy'
     };
-};
 
-// Ürün ekle (Firestore)
-window.addProductToFirebase = async function (product) {
-    if (!window.db) return null;
-    const doc = await window.db.collection('products').add({
-        storeId: product.storeId,
-        title: product.title,
-        price: product.price,
-        description: product.description || '',
-        material: product.material || '',
-        category: product.category || '',
-        isOnSale: product.isOnSale || false,
-        originalPrice: product.originalPrice || '',
-        imageUrl: product.imageUrl || '',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    const SERVER_TIMESTAMP_MARKER = { __showlyServerTimestamp: true };
 
-    console.log('✅ Ürün Firebase\'e eklendi, ID:', doc.id);
-    return { id: doc.id, ...product };
-};
+    function cloneValue(value) {
+        if (Array.isArray(value)) return value.map(cloneValue);
+        if (value && typeof value === 'object') {
+            const next = {};
+            Object.keys(value).forEach((key) => {
+                next[key] = cloneValue(value[key]);
+            });
+            return next;
+        }
+        return value;
+    }
 
-// Mağaza sil (Firestore)
-window.deleteStoreFromFirebase = async function (storeId) {
-    if (!window.db) return;
-    const batch = window.db.batch();
+    function getToken() {
+        try {
+            return sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
+        } catch (error) {
+            return '';
+        }
+    }
 
-    // Önce o mağazaya ait ürünleri sil
-    const productsSnapshot = await window.db.collection('products')
-        .where('storeId', '==', storeId)
-        .get();
+    async function apiRequest(url, options) {
+        const headers = new Headers(options && options.headers ? options.headers : {});
+        if (!headers.has('Content-Type') && !(options && options.body instanceof FormData)) {
+            headers.set('Content-Type', 'application/json');
+        }
 
-    productsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+        const token = getToken();
+        if (token) {
+            headers.set('Authorization', `Bearer ${token}`);
+        }
 
-    // Mağazayı sil
-    batch.delete(window.db.collection('stores').doc(storeId));
+        const response = await fetch(url, {
+            ...options,
+            headers
+        });
 
-    await batch.commit();
-    console.log('✅ Mağaza ve ürünleri silindi:', storeId);
-};
+        if (response.status === 204) {
+            return null;
+        }
 
-// Ürün sil (Firestore)
-window.deleteProductFromFirebase = async function (productId) {
-    if (!window.db) return;
-    await window.db.collection('products').doc(productId).delete();
-    console.log('✅ Ürün silindi:', productId);
-};
+        let payload = null;
+        try {
+            payload = await response.json();
+        } catch (error) {
+            payload = null;
+        }
 
-// Tüm mağazaları getir (Firestore)
-window.getStoresFromFirebase = async function () {
-    if (!window.db) return [];
-    const snapshot = await window.db.collection('stores').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-};
+        if (!response.ok) {
+            const message = payload && payload.message ? payload.message : `Request failed: ${response.status}`;
+            const error = new Error(message);
+            error.code = response.status;
+            error.response = payload;
+            throw error;
+        }
 
-// Tüm ürünleri getir (Firestore)
-window.getProductsFromFirebase = async function () {
-    if (!window.db) return [];
-    const snapshot = await window.db.collection('products').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-};
+        return payload;
+    }
+
+    function makeDocSnapshot(ref, raw) {
+        return {
+            id: raw ? raw.id : ref.id,
+            exists: Boolean(raw),
+            ref,
+            data() {
+                if (!raw) return undefined;
+                const data = { ...raw };
+                delete data.id;
+                return data;
+            }
+        };
+    }
+
+    function makeQuerySnapshot(docs) {
+        return {
+            docs,
+            empty: docs.length === 0,
+            size: docs.length,
+            forEach(callback) {
+                docs.forEach(callback);
+            }
+        };
+    }
+
+    function buildEndpoint(collectionName, id) {
+        const base = API_MAP[collectionName];
+        if (!base) {
+            throw new Error(`Unknown collection: ${collectionName}`);
+        }
+
+        if (collectionName === 'settings' && id) {
+            return `${base}/${encodeURIComponent(id)}`;
+        }
+
+        return id ? `${base}/${encodeURIComponent(id)}` : base;
+    }
+
+    class DocumentReference {
+        constructor(collectionName, id) {
+            this.collectionName = collectionName;
+            this.id = id;
+        }
+
+        async get() {
+            try {
+                const data = await apiRequest(buildEndpoint(this.collectionName, this.id), { method: 'GET' });
+                return makeDocSnapshot(this, data);
+            } catch (error) {
+                if (Number(error.code) === 404) {
+                    return makeDocSnapshot(this, null);
+                }
+                throw error;
+            }
+        }
+
+        async set(data) {
+            const payload = cloneValue(data);
+            const response = await apiRequest(buildEndpoint(this.collectionName, this.id), {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            return makeDocSnapshot(this, response);
+        }
+
+        async update(data) {
+            const payload = cloneValue(data);
+            const response = await apiRequest(buildEndpoint(this.collectionName, this.id), {
+                method: 'PATCH',
+                body: JSON.stringify(payload)
+            });
+            return makeDocSnapshot(this, response);
+        }
+
+        async delete() {
+            await apiRequest(buildEndpoint(this.collectionName, this.id), { method: 'DELETE' });
+        }
+    }
+
+    class Query {
+        constructor(collectionName) {
+            this.collectionName = collectionName;
+            this.filters = [];
+            this.order = null;
+        }
+
+        where(field, operator, value) {
+            if (operator !== '==') {
+                throw new Error('Only == operator is supported in local compatibility layer');
+            }
+            this.filters.push({ field, value });
+            return this;
+        }
+
+        orderBy(field, direction) {
+            this.order = { field, direction: direction || 'asc' };
+            return this;
+        }
+
+        doc(id) {
+            return new DocumentReference(this.collectionName, id || crypto.randomUUID());
+        }
+
+        async add(data) {
+            const payload = cloneValue(data);
+            const response = await apiRequest(buildEndpoint(this.collectionName), {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            return { id: response.id };
+        }
+
+        async get() {
+            const params = new URLSearchParams();
+            if (this.filters.length > 0) {
+                params.set('filters', JSON.stringify(this.filters));
+            }
+            if (this.order) {
+                params.set('orderBy', this.order.field);
+                params.set('orderDir', this.order.direction || 'asc');
+            }
+
+            const endpoint = buildEndpoint(this.collectionName);
+            const url = params.toString() ? `${endpoint}?${params.toString()}` : endpoint;
+            const rows = await apiRequest(url, { method: 'GET' });
+            const docs = (rows || []).map((row) => {
+                const ref = new DocumentReference(this.collectionName, row.id);
+                return makeDocSnapshot(ref, row);
+            });
+            return makeQuerySnapshot(docs);
+        }
+    }
+
+    class WriteBatch {
+        constructor() {
+            this.operations = [];
+        }
+
+        set(docRef, data) {
+            this.operations.push({ type: 'set', collection: docRef.collectionName, id: docRef.id, data: cloneValue(data) });
+            return this;
+        }
+
+        update(docRef, data) {
+            this.operations.push({ type: 'update', collection: docRef.collectionName, id: docRef.id, data: cloneValue(data) });
+            return this;
+        }
+
+        delete(docRef) {
+            this.operations.push({ type: 'delete', collection: docRef.collectionName, id: docRef.id });
+            return this;
+        }
+
+        async commit() {
+            await apiRequest('/api/batch', {
+                method: 'POST',
+                body: JSON.stringify({ operations: this.operations })
+            });
+        }
+    }
+
+    const db = {
+        collection(name) {
+            return new Query(name);
+        },
+        batch() {
+            return new WriteBatch();
+        },
+        settings() {
+            return null;
+        },
+        enablePersistence() {
+            return Promise.resolve();
+        }
+    };
+
+    window.showlyDB = {
+        async getStores() {
+            return apiRequest('/api/stores', { method: 'GET' });
+        },
+        async getProducts(storeId) {
+            if (!storeId) {
+                return apiRequest('/api/products', { method: 'GET' });
+            }
+            const params = new URLSearchParams({ filters: JSON.stringify([{ field: 'storeId', value: storeId }]) });
+            return apiRequest(`/api/products?${params.toString()}`, { method: 'GET' });
+        },
+        async addOrder(order) {
+            return apiRequest('/api/orders', {
+                method: 'POST',
+                body: JSON.stringify(order)
+            });
+        },
+        async deleteStore(storeId) {
+            return apiRequest(`/api/stores/${encodeURIComponent(storeId)}`, { method: 'DELETE' });
+        },
+        async deleteProduct(productId) {
+            return apiRequest(`/api/products/${encodeURIComponent(productId)}`, { method: 'DELETE' });
+        }
+    };
+
+    window.firebase = {
+        firestore: {
+            CACHE_SIZE_UNLIMITED: Number.MAX_SAFE_INTEGER,
+            FieldValue: {
+                serverTimestamp() {
+                    return cloneValue(SERVER_TIMESTAMP_MARKER);
+                },
+                increment(value) {
+                    return { __showlyIncrement: Number(value) || 0 };
+                }
+            }
+        }
+    };
+
+    window.db = db;
+})();

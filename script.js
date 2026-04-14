@@ -88,10 +88,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Firebase kontrolü
+    // API bridge kontrolü
     if (!window.db) {
-        console.error('❌ Firebase veritabanı bulunamadı!');
-        showNotification('Firebase yüklenemedi! Lütfen sayfayı yenileyin.', false);
+        console.error('❌ API istemcisi bulunamadı!');
+        showNotification('Sistem yüklenemedi! Lütfen sayfayı yenileyin.', false);
         return;
     }
 
@@ -241,57 +241,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Veri yükleme akışını en sona taşıdık (hoisting sorunlarını önlemek için)
 
-    // ✅ Veri çekme ve önbellekleme (Üç Katmanlı Mimari / Triple-Tier Promise Race)
+    // ✅ Veri çekme ve önbellekleme (local API)
     async function fetchAndCacheData(onlyStores = false) {
-        console.log('🔄 Temel veriler Firebase ve Worker yarışması (Race) ile yükleniyor...');
+        console.log('🔄 Temel veriler local API üzerinden yükleniyor...');
 
-        const fetchFirebase = async () => {
-            if (!window.db) throw new Error('Firebase DB bulunamadı');
-            const [storesSnap, parentCatsSnap, subCatsSnap, catsSnap] = await Promise.all([
-                window.db.collection('stores').get(),
-                window.db.collection('parentCategories').get(),
-                window.db.collection('subcategories').get(),
-                window.db.collection('categories').get()
-            ]);
+        const fetchCatalog = async () => {
+            if (!window.db) throw new Error('API bridge bulunamadı');
+            const response = await fetch('/api/catalog/bootstrap', {
+                method: 'GET',
+                cache: 'no-cache'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Bootstrap HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
             return {
-                stores: storesSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-                parentCategories: parentCatsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-                subcategories: subCatsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-                categories: catsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-                source: 'Firebase'
+                stores: data.stores || [],
+                parentCategories: data.parentCategories || [],
+                subcategories: data.subcategories || [],
+                categories: data.categories || [],
+                source: 'Local API'
             };
         };
 
-        const fetchWorker = async () => {
-            const WORKER_URL = 'https://api-worker.showlytmstore.workers.dev/';
-            // AbortController ile 8 saniyede Worker timeout verilebilir ama Promise.any halledecektir
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-            try {
-                const response = await fetch(WORKER_URL, {
-                    method: 'GET', mode: 'cors', cache: 'no-cache', signal: controller.signal
-                });
-                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-                const data = await response.json();
-                if (!data || !data.stores) throw new Error('Geçersiz Worker verisi');
-                return {
-                    stores: data.stores || [],
-                    parentCategories: data.parentCategories || [],
-                    subcategories: data.subcategories || [],
-                    categories: data.categories || [],
-                    source: 'Worker'
-                };
-            } finally {
-                clearTimeout(timeoutId);
-            }
-        };
-
         try {
-            // Hangi sunucu daha hızlıysa, sistem onu kabul eder ve yola devam eder
-            const result = await Promise.any([
-                fetchFirebase().catch(e => { console.warn('Firebase yarıştan çekildi:', e); throw e; }),
-                fetchWorker().catch(e => { console.warn('Worker yarıştan çekildi:', e); throw e; })
-            ]);
+            const result = await fetchCatalog();
 
             allStores = result.stores;
             window.allParentCategories = result.parentCategories;
@@ -314,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return true;
 
         } catch (masterError) {
-            console.error('❌ KRİTİK HATA: Hiçbir uzak sunucudan veri çekilemedi!', masterError);
+            console.error('❌ KRİTİK HATA: Temel veriler local API üzerinden çekilemedi!', masterError);
             return false;
         }
     }
