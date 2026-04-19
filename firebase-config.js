@@ -2,6 +2,18 @@
 (function () {
     'use strict';
 
+    function generateUUID() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        // Fallback for HTTP (non-secure) contexts
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            var r = Math.random() * 16 | 0;
+            var v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
     const API_MAP = {
         stores: '/api/stores',
         products: '/api/products',
@@ -174,7 +186,7 @@
         }
 
         doc(id) {
-            return new DocumentReference(this.collectionName, id || crypto.randomUUID());
+            return new DocumentReference(this.collectionName, id || generateUUID());
         }
 
         async add(data) {
