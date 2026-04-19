@@ -305,6 +305,12 @@
                             </select>
                         </div>
                     </div>
+                    <div class="product-import-actions">
+                        <button class="btn-primary" id="import-products-btn" type="button">
+                            <i class="fas fa-file-import"></i> Excel'den haryt yukle
+                        </button>
+                        <input type="file" id="import-products-input" accept=".xlsx,.xls" style="display:none;">
+                    </div>
                     <div class="table-container">
                         <table class="admin-table">
                             <thead>
@@ -1037,8 +1043,10 @@
     <script src="r2-config.js"></script>
     <link rel="stylesheet" href="admin.css">
     <script src="/vendor/chart.js/dist/chart.umd.js"></script>
+    <script src="/vendor/xlsx/dist/xlsx.full.min.js"></script>
 
     <!-- Diğer Scriptleriniz (Versiyon Parametresi İLE) -->
+    <script src="excel-manager.js"></script>
     <script src="admin.js"></script>
 </body>
 

@@ -3518,6 +3518,38 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ✅ Excel'den Haryt Yukle
+    const importProductsBtn = document.getElementById('import-products-btn');
+    const importProductsInput = document.getElementById('import-products-input');
+
+    if (importProductsBtn && importProductsInput) {
+        importProductsBtn.addEventListener('click', () => {
+            importProductsInput.click();
+        });
+
+        importProductsInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                await ExcelManager.importProductsFromExcel(file);
+                // Ürünler tablosunu ve cache'i yenile
+                if (typeof loadAllData === 'function') {
+                    await loadAllData();
+                } else {
+                    window.location.reload(); // Fallback
+                }
+                
+                // Input'u temizle
+                importProductsInput.value = '';
+                
+            } catch (error) {
+                console.error('Excel içe aktarma hatası:', error);
+                alert('Excel yüklenirken bir hata oluştu: ' + error.message);
+            }
+        });
+    }
+
     // ✅ Verileri yükle
     loadAllData();
 });
