@@ -36,7 +36,6 @@ app.use(env.publicUploadBase, express.static(env.uploadDir));
 app.use('/vendor/fontawesome', express.static(path.join(env.rootDir, 'node_modules', '@fortawesome', 'fontawesome-free')));
 app.use('/vendor/chart.js', express.static(path.join(env.rootDir, 'node_modules', 'chart.js')));
 app.use('/vendor/bcryptjs', express.static(path.join(env.rootDir, 'node_modules', 'bcryptjs')));
-app.use('/vendor/xlsx', express.static(path.join(env.rootDir, 'vendor', 'xlsx')));
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
