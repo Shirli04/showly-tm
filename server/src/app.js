@@ -5,6 +5,7 @@ const express = require('express');
 const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const XLSX = require('xlsx');
 const env = require('./config/env');
 const HttpError = require('./utils/http-error');
 const asyncHandler = require('./utils/async-handler');
@@ -107,9 +108,6 @@ app.delete('/api/uploads', requireAuth, asyncHandler(async (req, res) => {
 
 app.post('/api/products/import-excel', requireAuth, upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new HttpError(400, 'Excel dosyası gerekli');
-
-  const XLSX = require('xlsx');
-  const fs = require('fs');
 
   try {
     const workbook = XLSX.readFile(req.file.path);
