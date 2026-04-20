@@ -2655,11 +2655,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!url || typeof url !== 'string') return '';
         url = url.trim();
 
-        // HTTP'yi HTTPS'e zorla (Mixed Content hatasını önlemek için)
-        if (url.startsWith('http://')) {
-            url = url.replace('http://', 'https://');
-        }
-
         // Resimler zaten WebP formatında, ek dönüşüm gereksiz
         return url;
     }
