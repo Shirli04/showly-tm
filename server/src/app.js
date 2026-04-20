@@ -105,6 +105,77 @@ app.delete('/api/uploads', requireAuth, asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
+app.post('/api/products/import-excel', requireAuth, upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) throw new HttpError(400, 'Excel dosyası gerekli');
+
+  const XLSX = require('xlsx');
+  const fs = require('fs');
+
+  try {
+    const workbook = XLSX.readFile(req.file.path);
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+    const stores = await listResource('stores', {});
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      try {
+        const storeName = String(row['Magazyn Ady'] || row['Mağaza Adı'] || row['Magaza Adi'] || '').trim();
+        if (!storeName) { errorCount++; errors.push(`Satır ${i + 2}: Mağaza adı boş`); continue; }
+
+        const store = stores.find(s => {
+          const sName = String(s.name || '').toLowerCase();
+          const sSlug = String(s.slug || '').toLowerCase();
+          return sName === storeName.toLowerCase() || sSlug === storeName.toLowerCase();
+        });
+        if (!store) { errorCount++; errors.push(`Satır ${i + 2}: "${storeName}" mağazası bulunamadı`); continue; }
+
+        const title = String(row['Haryt Ady (TM)'] || row['Haryt Ady'] || row['Ürün Adı'] || '').trim();
+        if (!title) { errorCount++; errors.push(`Satır ${i + 2}: Ürün adı boş`); continue; }
+
+        const normalPrice = String(row['Baha'] || row['Normal Fiyat'] || '0').trim().replace('TMT', '').trim();
+        const discountedPrice = String(row['Arzanladyş Bahasy'] || row['İndirimli Fiyat'] || '').trim().replace('TMT', '').trim();
+        const isOnSale = discountedPrice && !isNaN(discountedPrice) && parseFloat(discountedPrice) > 0;
+
+        const productData = {
+          storeId: store.id,
+          title,
+          description: String(row['Düşündiriş (TM)'] || row['Düşündiriş'] || row['Açıklama'] || '').trim(),
+          name_ru: String(row['Haryt Ady (RU)'] || '').trim(),
+          name_en: String(row['Haryt Ady (EN)'] || '').trim(),
+          desc_ru: String(row['Düşündiriş (RU)'] || '').trim(),
+          desc_en: String(row['Düşündiriş (EN)'] || '').trim(),
+          price: `${normalPrice} TMT`,
+          originalPrice: isOnSale ? `${discountedPrice} TMT` : '',
+          isOnSale,
+          category: String(row['Kategoriýa (TM)'] || row['Kategoriýa'] || row['Kategori'] || '').trim(),
+          category_ru: String(row['Kategoriýa (RU)'] || '').trim(),
+          category_en: String(row['Kategoriýa (EN)'] || '').trim(),
+          material: String(row['Material'] || row['Malzeme'] || '').trim(),
+          imageUrl: String(row['Surat URL'] || row['Resim URL'] || '').trim(),
+        };
+
+        const existingId = row['Haryt ID'] || row['Product ID'];
+        await upsertResource('products', productData, existingId || undefined);
+        successCount++;
+      } catch (err) {
+        errorCount++;
+        errors.push(`Satır ${i + 2}: ${err.message}`);
+      }
+    }
+
+    fs.unlinkSync(req.file.path);
+    res.json({ success: true, successCount, errorCount, errors: errors.slice(0, 10) });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    throw err;
+  }
+}));
+
 app.post('/api/batch', requireAuth, asyncHandler(async (req, res) => {
   const operations = Array.isArray(req.body?.operations) ? req.body.operations : [];
   await commitBatch(operations);
