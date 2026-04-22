@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const XLSX = require('xlsx');
+const multer = require('multer');
 const env = require('./config/env');
 const HttpError = require('./utils/http-error');
 const asyncHandler = require('./utils/async-handler');
@@ -106,7 +107,12 @@ app.delete('/api/uploads', requireAuth, asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
-app.post('/api/products/import-excel', requireAuth, upload.single('file'), asyncHandler(async (req, res) => {
+const excelUpload = multer({ storage: multer.diskStorage({
+  destination(req, file, cb) { cb(null, require('os').tmpdir()); },
+  filename(req, file, cb) { cb(null, `excel-${Date.now()}.xlsx`); }
+}) });
+
+app.post('/api/products/import-excel', requireAuth, excelUpload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new HttpError(400, 'Excel dosyası gerekli');
 
   try {
