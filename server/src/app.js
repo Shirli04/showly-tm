@@ -120,6 +120,22 @@ app.post('/api/products/import-excel', requireAuth, excelUpload.single('file'), 
     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
     const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
+    // Büyük/küçük harf duyarsız field okuma (ý/y varyantları dahil)
+    function getField(row, ...keys) {
+      const rowLower = {};
+      Object.keys(row).forEach(k => {
+        const normalized = k.toLowerCase().replace(/ý/g, 'y').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ň/g, 'n').replace(/ž/g, 'z');
+        rowLower[normalized] = row[k];
+        rowLower[k.toLowerCase()] = row[k];
+      });
+      for (const key of keys) {
+        const keyNorm = key.toLowerCase().replace(/ý/g, 'y').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ň/g, 'n').replace(/ž/g, 'z');
+        const val = rowLower[keyNorm] ?? rowLower[key.toLowerCase()];
+        if (val !== undefined && val !== null && String(val).trim() !== '') return String(val).trim();
+      }
+      return '';
+    }
+
     const stores = await listResource('stores', {});
     let successCount = 0;
     let errorCount = 0;
@@ -128,7 +144,7 @@ app.post('/api/products/import-excel', requireAuth, excelUpload.single('file'), 
     for (let i = 0; i < jsonData.length; i++) {
       const row = jsonData[i];
       try {
-        const storeName = String(row['Magazyn Ady'] || row['Mağaza Adı'] || row['Magaza Adi'] || '').trim();
+        const storeName = getField(row, 'Magazyn Ady', 'Mağaza Adı', 'Magaza Adi');
         if (!storeName) { errorCount++; errors.push(`Satır ${i + 2}: Mağaza adı boş`); continue; }
 
         const store = stores.find(s => {
@@ -138,32 +154,33 @@ app.post('/api/products/import-excel', requireAuth, excelUpload.single('file'), 
         });
         if (!store) { errorCount++; errors.push(`Satır ${i + 2}: "${storeName}" mağazası bulunamadı`); continue; }
 
-        const title = String(row['Haryt Ady (TM)'] || row['Haryt Ady'] || row['Ürün Adı'] || '').trim();
+        const title = getField(row, 'Haryt Ady (TM)', 'Haryt Ady', 'Ürün Adı');
         if (!title) { errorCount++; errors.push(`Satır ${i + 2}: Ürün adı boş`); continue; }
 
-        const normalPrice = String(row['Baha'] || row['Normal Fiyat'] || '0').trim().replace('TMT', '').trim();
-        const discountedPrice = String(row['Arzanladyş Bahasy'] || row['İndirimli Fiyat'] || '').trim().replace('TMT', '').trim();
+        const normalPrice = getField(row, 'Baha', 'Normal Fiyat') || '0';
+        const normalPriceClean = normalPrice.replace('TMT', '').trim();
+        const discountedPrice = getField(row, 'Arzanladyş Bahasy', 'İndirimli Fiyat').replace('TMT', '').trim();
         const isOnSale = discountedPrice && !isNaN(discountedPrice) && parseFloat(discountedPrice) > 0;
 
         const productData = {
           storeId: store.id,
           title,
-          description: String(row['Düşündiriş (TM)'] || row['Düşündiriş'] || row['Açıklama'] || '').trim(),
-          name_ru: String(row['Haryt Ady (RU)'] || '').trim(),
-          name_en: String(row['Haryt Ady (EN)'] || '').trim(),
-          desc_ru: String(row['Düşündiriş (RU)'] || '').trim(),
-          desc_en: String(row['Düşündiriş (EN)'] || '').trim(),
-          price: `${normalPrice} TMT`,
+          description: getField(row, 'Düşündiriş (TM)', 'Düşündiriş', 'Açıklama'),
+          name_ru: getField(row, 'Haryt Ady (RU)', 'Haryt Ady (Ru)'),
+          name_en: getField(row, 'Haryt Ady (EN)', 'Haryt Ady (En)'),
+          desc_ru: getField(row, 'Düşündiriş (RU)', 'Düşündiriş (Ru)'),
+          desc_en: getField(row, 'Düşündiriş (EN)', 'Düşündiriş (En)'),
+          price: `${normalPriceClean} TMT`,
           originalPrice: isOnSale ? `${discountedPrice} TMT` : '',
           isOnSale,
-          category: String(row['Kategoriýa (TM)'] || row['Kategoriýa'] || row['Kategori'] || '').trim(),
-          category_ru: String(row['Kategoriýa (RU)'] || '').trim(),
-          category_en: String(row['Kategoriýa (EN)'] || '').trim(),
-          material: String(row['Material'] || row['Malzeme'] || '').trim(),
-          imageUrl: String(row['Surat URL'] || row['Resim URL'] || '').trim(),
+          category: getField(row, 'Kategoriýa (TM)', 'Kategoriýa', 'Kategori'),
+          category_ru: getField(row, 'Kategoriýa (RU)', 'Kategoriýa (Ru)'),
+          category_en: getField(row, 'Kategoriýa (EN)', 'Kategoriýa (En)'),
+          material: getField(row, 'Material', 'Malzeme'),
+          imageUrl: getField(row, 'Surat URL', 'Resim URL'),
         };
 
-        const existingId = row['Haryt ID'] || row['Product ID'];
+        const existingId = getField(row, 'Haryt ID', 'Product ID');
         await upsertResource('products', productData, existingId || undefined);
         successCount++;
       } catch (err) {
