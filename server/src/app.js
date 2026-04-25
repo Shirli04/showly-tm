@@ -66,7 +66,8 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
     id: user.id,
     username: user.username,
     role: user.role,
-    permissions: Array.isArray(user.permissions) ? user.permissions : []
+    permissions: Array.isArray(user.permissions) ? user.permissions : [],
+    storeId: user.storeId || user.store_id || null
   };
 
   const token = jwt.sign(payload, env.jwtSecret, { expiresIn: '7d' });
