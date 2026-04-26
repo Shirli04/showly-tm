@@ -70,6 +70,11 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
     storeId: user.storeId || user.store_id || null
   };
 
+  const requiresStore = payload.role !== 'admin' && payload.role !== 'superadmin';
+  if (requiresStore && !payload.storeId) {
+    throw new HttpError(403, 'Bu kullaniciya magaza atanmamis. Lutfan admin panelinden magaza baglayin.');
+  }
+
   const token = jwt.sign(payload, env.jwtSecret, { expiresIn: '7d' });
   res.json({ token, user: payload });
 }));

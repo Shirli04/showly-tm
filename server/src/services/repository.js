@@ -695,6 +695,13 @@ async function upsertUser(payload, id) {
     throw new HttpError(400, 'Password is required');
   }
 
+  const normalizedRole = source.role || 'admin';
+  const normalizedStoreId = source.storeId || source.store_id || null;
+  const requiresStore = normalizedRole !== 'admin' && normalizedRole !== 'superadmin';
+  if (requiresStore && !normalizedStoreId) {
+    throw new HttpError(400, 'storeId is required for this role');
+  }
+
   const result = await query(`
     INSERT INTO users (id, username, password_hash, role, permissions, store_id)
     VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5::jsonb, $6)
@@ -710,9 +717,9 @@ async function upsertUser(payload, id) {
     id || data.id || null,
     source.username,
     passwordHash,
-    source.role || 'admin',
+    normalizedRole,
     JSON.stringify(ensureArray(source.permissions)),
-    source.storeId || source.store_id || null
+    normalizedStoreId
   ]);
   return normalizeUser(result.rows[0]);
 }
