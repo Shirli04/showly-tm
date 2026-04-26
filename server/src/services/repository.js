@@ -141,6 +141,7 @@ function normalizeUser(row) {
     username: row.username,
     role: row.role,
     permissions: ensureArray(row.permissions),
+    storeId: row.store_id || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -695,13 +696,14 @@ async function upsertUser(payload, id) {
   }
 
   const result = await query(`
-    INSERT INTO users (id, username, password_hash, role, permissions)
-    VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5::jsonb)
+    INSERT INTO users (id, username, password_hash, role, permissions, store_id)
+    VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5::jsonb, $6)
     ON CONFLICT (id) DO UPDATE SET
       username = EXCLUDED.username,
       password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
       role = EXCLUDED.role,
       permissions = EXCLUDED.permissions,
+      store_id = EXCLUDED.store_id,
       updated_at = NOW()
     RETURNING *
   `, [
@@ -709,7 +711,8 @@ async function upsertUser(payload, id) {
     source.username,
     passwordHash,
     source.role || 'admin',
-    JSON.stringify(ensureArray(source.permissions))
+    JSON.stringify(ensureArray(source.permissions)),
+    source.storeId || source.store_id || null
   ]);
   return normalizeUser(result.rows[0]);
 }
@@ -821,3 +824,4 @@ module.exports = {
   getCatalogBootstrap,
   commitBatch
 };
+
