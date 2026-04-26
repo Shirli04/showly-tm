@@ -262,7 +262,7 @@ function createCrudRoutes(basePath, resource, options = {}) {
 createCrudRoutes('/api/stores', 'stores');
 createCrudRoutes('/api/products', 'products');
 createCrudRoutes('/api/orders', 'orders', { publicCreate: true });
-createCrudRoutes('/api/users', 'users', { superAdminOnly: true });
+createCrudRoutes('/api/users', 'users');
 createCrudRoutes('/api/categories/parents', 'parentCategories');
 createCrudRoutes('/api/categories/subcategories', 'subcategories');
 createCrudRoutes('/api/reservation-packages', 'reservationPackages');
