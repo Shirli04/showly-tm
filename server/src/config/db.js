@@ -34,6 +34,17 @@ const pool = env.databaseUrl === 'memory'
       : false
   });
 
+async function runMigrations() {
+  if (env.databaseUrl === 'memory') return;
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS store_id UUID REFERENCES stores(id) ON DELETE SET NULL;
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_users_store_id ON users(store_id);
+  `);
+}
+
 async function query(text, params) {
   return pool.query(text, params);
 }
@@ -56,5 +67,6 @@ async function withTransaction(work) {
 module.exports = {
   pool,
   query,
-  withTransaction
+  withTransaction,
+  runMigrations
 };
