@@ -3,3 +3,7 @@ node_modules/
 uploads/
 npm-debug.log*
 *.log
+
+server/firebase-service-account*.json
+
+.env

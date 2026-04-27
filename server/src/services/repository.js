@@ -142,6 +142,8 @@ function normalizeUser(row) {
     role: row.role,
     permissions: ensureArray(row.permissions),
     storeId: row.store_id || null,
+    fcmToken: row.fcm_token || null,
+    fcmTokens: Array.isArray(row.fcm_tokens) ? row.fcm_tokens.filter(Boolean) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -328,6 +330,42 @@ async function getUser(id) {
 async function getUserWithPasswordByUsername(username) {
   const result = await query('SELECT * FROM users WHERE username = $1 LIMIT 1', [username]);
   return result.rows[0] || null;
+}
+
+async function saveUserFcmToken(userId, token) {
+  if (!userId || !token) {
+    throw new HttpError(400, 'userId and token are required');
+  }
+
+  await query(`
+    UPDATE users
+    SET
+      fcm_token = $2,
+      fcm_tokens = CASE
+        WHEN $2 = ANY(COALESCE(fcm_tokens, ARRAY[]::text[])) THEN COALESCE(fcm_tokens, ARRAY[]::text[])
+        ELSE array_append(COALESCE(fcm_tokens, ARRAY[]::text[]), $2)
+      END,
+      updated_at = NOW()
+    WHERE id = $1
+  `, [userId, token]);
+}
+
+async function listFcmTokensByStoreId(storeId) {
+  if (!storeId) return [];
+  const result = await query(`
+    SELECT COALESCE(array_remove(array_agg(DISTINCT tok), NULL), ARRAY[]::text[]) AS tokens
+    FROM (
+      SELECT unnest(COALESCE(fcm_tokens, ARRAY[]::text[])) AS tok
+      FROM users
+      WHERE store_id = $1
+      UNION
+      SELECT fcm_token AS tok
+      FROM users
+      WHERE store_id = $1
+    ) tokens_union
+  `, [storeId]);
+
+  return Array.isArray(result.rows[0]?.tokens) ? result.rows[0].tokens.filter(Boolean) : [];
 }
 
 async function getParentCategory(id) {
@@ -703,14 +741,19 @@ async function upsertUser(payload, id) {
   }
 
   const result = await query(`
-    INSERT INTO users (id, username, password_hash, role, permissions, store_id)
-    VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5::jsonb, $6)
+    INSERT INTO users (id, username, password_hash, role, permissions, store_id, fcm_token, fcm_tokens)
+    VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5::jsonb, $6, $7, $8::text[])
     ON CONFLICT (id) DO UPDATE SET
       username = EXCLUDED.username,
       password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
       role = EXCLUDED.role,
       permissions = EXCLUDED.permissions,
       store_id = EXCLUDED.store_id,
+      fcm_token = COALESCE(EXCLUDED.fcm_token, users.fcm_token),
+      fcm_tokens = CASE
+        WHEN EXCLUDED.fcm_tokens IS NULL OR cardinality(EXCLUDED.fcm_tokens) = 0 THEN users.fcm_tokens
+        ELSE EXCLUDED.fcm_tokens
+      END,
       updated_at = NOW()
     RETURNING *
   `, [
@@ -719,7 +762,9 @@ async function upsertUser(payload, id) {
     passwordHash,
     normalizedRole,
     JSON.stringify(ensureArray(source.permissions)),
-    normalizedStoreId
+    normalizedStoreId,
+    source.fcmToken || source.fcm_token || null,
+    Array.isArray(source.fcmTokens || source.fcm_tokens) ? (source.fcmTokens || source.fcm_tokens) : []
   ]);
   return normalizeUser(result.rows[0]);
 }
@@ -828,6 +873,8 @@ module.exports = {
   upsertResource,
   deleteByResource,
   getUserWithPasswordByUsername,
+  saveUserFcmToken,
+  listFcmTokensByStoreId,
   getCatalogBootstrap,
   commitBatch
 };

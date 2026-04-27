@@ -21,9 +21,11 @@ const {
   upsertResource,
   deleteByResource,
   getUserWithPasswordByUsername,
+  saveUserFcmToken,
   getCatalogBootstrap,
   commitBatch
 } = require('./services/repository');
+const { sendNewOrderNotification } = require('./services/fcm');
 
 const app = express();
 
@@ -82,6 +84,16 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
 });
+
+app.post('/api/auth/fcm-token', requireAuth, asyncHandler(async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (!token) {
+    throw new HttpError(400, 'token is required');
+  }
+
+  await saveUserFcmToken(req.user.id, token);
+  res.json({ success: true });
+}));
 
 app.get('/api/catalog/bootstrap', asyncHandler(async (req, res) => {
   res.json(await getCatalogBootstrap());
@@ -241,7 +253,15 @@ function createCrudRoutes(basePath, resource, options = {}) {
     : [requireAuth, requireRoleOrPermission(permissionForResource(resource))];
 
   const createHandler = asyncHandler(async (req, res) => {
-    res.status(201).json(await upsertResource(resource, req.body));
+    const created = await upsertResource(resource, req.body);
+
+    if (resource === 'orders' && created?.id) {
+      sendNewOrderNotification(created).catch((error) => {
+        console.error('[FCM] Failed to send order notification:', error.message);
+      });
+    }
+
+    res.status(201).json(created);
   });
 
   if (options.publicCreate) {

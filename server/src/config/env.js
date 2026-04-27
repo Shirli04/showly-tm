@@ -16,5 +16,7 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || 'change-me',
   uploadDir: process.env.UPLOAD_DIR || defaultUploadDir,
   publicUploadBase: process.env.PUBLIC_UPLOAD_BASE || '/uploads',
-  corsOrigin: process.env.CORS_ORIGIN || '*'
+  corsOrigin: process.env.CORS_ORIGIN || '*',
+  firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || ''
 };
