@@ -1071,9 +1071,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             let storeViews = store.views || 0;
             try {
                 const storeRef = window.db.collection('stores').doc(storeId);
-                storeRef.update({
-                    views: firebase.firestore.FieldValue.increment(1)
-                }).catch(e => console.warn('Sayaç DB hatası:', e));
+                let token = '';
+                try {
+                    token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
+                } catch (tokenErr) {
+                    token = '';
+                }
+
+                if (token) {
+                    storeRef.update({
+                        views: firebase.firestore.FieldValue.increment(1)
+                    }).catch(e => console.warn('Sayaç DB hatası:', e));
+                }
                 storeViews += 1;
                 const storeIdx = allStores.findIndex(s => s.id === storeId);
                 if (storeIdx !== -1) allStores[storeIdx].views = storeViews;
@@ -2181,7 +2190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 return `
                     <div class="cart-item">
-                        <img src="${item.imageUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2230%22 height=%2230%22%3E%3Crect fill=%22%23f5f5f5%22 width=%2230%22 height=%2230%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%228%22%3E%3C/text%3E%3C/svg%3E'}" style="width: 30px; height: 30px; max-width: 30px; max-height: 30px;" alt="${displayTitle}">
+                        <img src="${getOptimizedImageUrl(item.imageUrl) || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2230%22 height=%2230%22%3E%3Crect fill=%22%23f5f5f5%22 width=%2230%22 height=%2230%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%228%22%3E%3C/text%3E%3C/svg%3E'}" style="width: 30px; height: 30px; max-width: 30px; max-height: 30px;" alt="${displayTitle}">
                         <div class="cart-item-details">
                             <div class="cart-item-title">${displayTitle}</div>
                             <div class="cart-item-price">${item.price}</div>
@@ -2538,7 +2547,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
 
                 const img = document.createElement('img');
-                img.src = product.imageUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f5f5f5%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2214%22%3E%3C/text%3E%3C/svg%3E';
+                img.src = getOptimizedImageUrl(product.imageUrl) || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23f5f5f5%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-size=%2214%22%3E%3C/text%3E%3C/svg%3E';
                 img.alt = getProductField(product, 'name', fLang) || 'Product';
                 favItem.querySelector('.fav-img-container').appendChild(img);
                 favoritesItems.appendChild(favItem);
@@ -2653,12 +2662,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- YARDIMCI FONKSİYONLAR ---
     function getOptimizedImageUrl(url, width = 400) {
         if (!url || typeof url !== 'string') return '';
-        url = url.trim();
-
-        // Resimler zaten WebP formatında, ek dönüşüm gereksiz
-        return url;
+        const trimmed = url.trim();
+        if (!trimmed) return '';
+        if (trimmed.startsWith('data:')) return trimmed;
+        try {
+            const parsed = new URL(trimmed, window.location.origin);
+            const isHttpsPage = window.location.protocol === 'https:';
+            const isHttpResource = parsed.protocol === 'http:';
+            const isIPv4Host = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(parsed.hostname);
+            if (isHttpsPage && isHttpResource && isIPv4Host) {
+                return `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+            }
+            if (isHttpsPage && isHttpResource) {
+                parsed.protocol = 'https:';
+            }
+            return parsed.toString();
+        } catch (error) {
+            return trimmed;
+        }
     }
-
     function openProductModal(productId) {
         const product = allProducts.find(p => p.id === productId);
         if (!product) return;
@@ -2673,7 +2695,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const modalSkeleton = document.getElementById('modal-img-skeleton');
 
         // ✅ GÜNCELLENDİ: Tıklanan ürünün ekrandaki mevcut resim kaynağını bul (Yeniden yüklemeyi önle)
-        let preloadedImageUrl = product.imageUrl; // Varsayılan CDN Linki
+        let preloadedImageUrl = getOptimizedImageUrl(product.imageUrl); // Varsayılan CDN Linki
         const existingImgEl = document.querySelector(`.product-card img[src*="${product.id}"]`) || document.querySelector(`.btn-favorite[data-id="${productId}"]`)?.closest('.product-card')?.querySelector('.product-img');
 
         if (existingImgEl && existingImgEl.src && existingImgEl.src.length > 100) {
