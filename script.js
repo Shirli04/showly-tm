@@ -3337,7 +3337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // ✅ YENİ: Dil değişim callback'i – DOM yeniden oluşturulmadan güncelleme
-    onLanguageChange((newLang) => {
+    const handleLanguageChange = (newLang) => {
         // 1. Statik metinleri güncelle (data-i18n / data-i18n-placeholder)
         applyTranslations();
 
@@ -3438,7 +3438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 5. Kategori menüsünü güncelle (dile göre kategori adları)
         renderCategoryMenu();
-    });
+    };
 
     // --- İLK YÜKLEME ---
     // --- BAŞLATMA MANTIĞI (Güvenli Yükleme ve Önbellek) ---
@@ -3516,6 +3516,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     });
+
+    if (typeof window.onLanguageChange === 'function') {
+        window.onLanguageChange(handleLanguageChange);
+    } else {
+        console.error('❌ language.js yüklenemedi veya Cloudflare tarafından engellendi.');
+        const host = window.location.hostname;
+        const isShowlyDomain = host === 'showlytm.store' || host === 'www.showlytm.store';
+        const isDirectHost = host === 'direct.showlytm.store';
+        if (isShowlyDomain && !isDirectHost) {
+            const targetUrl = `https://direct.showlytm.store${window.location.pathname}${window.location.search}${window.location.hash}`;
+            window.location.replace(targetUrl);
+        }
+    }
 
     // ✅ YENİ: Service Worker Kaydı (Çevrimdışı / Offline Destek)
     if ('serviceWorker' in navigator) {
