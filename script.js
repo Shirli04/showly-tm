@@ -95,6 +95,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    async function ensureApiReachability() {
+        const host = window.location.hostname;
+        const isDirectHost = host === 'direct.showlytm.store';
+        const isShowlyDomain = host === 'showlytm.store' || host === 'www.showlytm.store';
+
+        if (!isShowlyDomain || isDirectHost) return;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        try {
+            const response = await fetch('/api/health', {
+                method: 'GET',
+                cache: 'no-store',
+                signal: controller.signal
+            });
+            if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+        } catch (error) {
+            const targetUrl = `https://direct.showlytm.store${window.location.pathname}${window.location.search}${window.location.hash}`;
+            window.location.replace(targetUrl);
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    await ensureApiReachability();
+
     // ✅ PERFORMANS: Direkt mağaza erişiminde skeleton göster, ana sayfada home elemanlarını koru.
     const currentPath = window.location.pathname.replace('/', '');
     const isDirectStoreAccess = currentPath && currentPath !== '';
@@ -888,7 +915,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const featuredProducts = uniqueIds
                     .map((id) => validProductsById.get(id))
-                    .filter(Boolean);
+                    .filter(Boolean)
+                    .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'tr', { sensitivity: 'base' }));
 
                 featuredProductsCache[storeId] = { status: 'ready', products: featuredProducts, timestamp: Date.now() };
                 return featuredProducts;
@@ -940,7 +968,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function getReadyMealProductsForStore(storeId, storeProducts = []) {
-        if (!storeId || !window.db) return getReadyMealProductsFromStoreProducts(storeProducts);
+        if (!storeId || !window.db) return [];
 
         const cached = readyMealProductsCache[storeId];
         if (cached && cached.status === 'ready' && (Date.now() - (cached.timestamp || 0) < READY_MEALS_CACHE_TTL)) return cached.products;
@@ -950,9 +978,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const storeDoc = await window.db.collection('stores').doc(storeId).get();
                 if (!storeDoc.exists) {
-                    const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
-                    readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
-                    return fallback;
+                    readyMealProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                    return [];
                 }
 
                 const storeData = storeDoc.data() || {};
@@ -960,9 +987,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const rawIds = Array.isArray(storeData.readyMealProductIds) ? storeData.readyMealProductIds : [];
 
                 if (!isEnabled || rawIds.length === 0) {
-                    const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
-                    readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
-                    return fallback;
+                    readyMealProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                    return [];
                 }
 
                 const uniqueIds = [];
@@ -975,9 +1001,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
 
                 if (uniqueIds.length === 0) {
-                    const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
-                    readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
-                    return fallback;
+                    readyMealProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                    return [];
                 }
 
                 const productDocSnapshots = await Promise.all(
@@ -1000,21 +1025,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const readyMealProducts = uniqueIds
                     .map((id) => validProductsById.get(id))
-                    .filter(Boolean);
+                    .filter(Boolean)
+                    .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'tr', { sensitivity: 'base' }));
 
                 if (readyMealProducts.length > 0) {
                     readyMealProductsCache[storeId] = { status: 'ready', products: readyMealProducts, timestamp: Date.now() };
                     return readyMealProducts;
                 }
 
-                const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
-                readyMealProductsCache[storeId] = { status: 'ready', products: fallback, timestamp: Date.now() };
-                return fallback;
+                readyMealProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
+                return [];
             } catch (error) {
                 console.warn('Taýyn naharlar alınamadı:', error);
-                const fallback = getReadyMealProductsFromStoreProducts(storeProducts);
-                readyMealProductsCache[storeId] = { status: 'error', products: fallback, timestamp: Date.now() };
-                return fallback;
+                readyMealProductsCache[storeId] = { status: 'error', products: [], timestamp: Date.now() };
+                return [];
             }
         })();
 

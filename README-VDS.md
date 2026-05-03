@@ -49,7 +49,7 @@ DATABASE_URL=postgresql://showly:strong-password@127.0.0.1:5432/showly
 JWT_SECRET=very-long-random-secret
 UPLOAD_DIR=/var/www/uploads
 PUBLIC_UPLOAD_BASE=/uploads
-CORS_ORIGIN=https://your-domain.com
+CORS_ORIGIN=https://showlytm.store,https://www.showlytm.store,https://direct.showlytm.store
 ```
 
 ## 6) Ilk admin kullanicisi
@@ -77,8 +77,8 @@ pm2 startup
 ## 8) NGINX reverse proxy
 
 ```bash
-sudo cp deploy/nginx-showly.conf /etc/nginx/sites-available/showly
-sudo ln -s /etc/nginx/sites-available/showly /etc/nginx/sites-enabled/showly
+sudo cp deploy/nginx-showly.conf /etc/nginx/sites-available/showlytm.store
+sudo ln -s /etc/nginx/sites-available/showlytm.store /etc/nginx/sites-enabled/showlytm.store
 sudo nginx -t
 sudo systemctl restart nginx
 ```
@@ -87,7 +87,7 @@ sudo systemctl restart nginx
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+sudo certbot --nginx -d showlytm.store -d www.showlytm.store -d direct.showlytm.store
 ```
 
 ## REST API ornekleri

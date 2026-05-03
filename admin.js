@@ -169,11 +169,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const storeSchemaImage = document.getElementById('store-schema-image');
     const storeSchemaPreview = document.getElementById('store-schema-preview');
     const storeSchemaUrl = document.getElementById('store-schema-url');
+    const storeFeaturedProductsEnabledInput = document.getElementById('store-featured-products-enabled');
+    const storeReadyMealsEnabledInput = document.getElementById('store-ready-meals-enabled');
+    const storeSpecialTabReady = document.getElementById('store-special-tab-ready');
+    const storeSpecialTabFeatured = document.getElementById('store-special-tab-featured');
+    const storeSpecialProductsList = document.getElementById('store-special-products-list');
+    const storeSpecialProductsHelper = document.getElementById('store-special-products-helper');
 
     let editingStoreId = null;
     let editingProductId = null;
     let uploadedProductImageUrl = null;
     let uploadedSchemaUrl = null;
+    let storeSpecialSelectionMode = 'ready';
+    let storeSpecialProducts = [];
+    let storeSpecialFeaturedIds = [];
+    let storeSpecialReadyMealIds = [];
 
     // Form gönderme kontrolü
     let isSubmitting = false;
@@ -625,6 +635,144 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Mağaza düzenle
+    const normalizeSpecialProductName = (product) => {
+        return String(product?.title || product?.name || '').trim();
+    };
+
+    const sortSpecialProductsAlphabetically = (products) => {
+        return [...products].sort((a, b) =>
+            normalizeSpecialProductName(a).localeCompare(normalizeSpecialProductName(b), 'tr', { sensitivity: 'base' })
+        );
+    };
+
+    const syncStoreSpecialTabs = () => {
+        if (!storeSpecialTabReady || !storeSpecialTabFeatured) return;
+        storeSpecialTabReady.classList.toggle('active', storeSpecialSelectionMode === 'ready');
+        storeSpecialTabFeatured.classList.toggle('active', storeSpecialSelectionMode === 'featured');
+    };
+
+    const renderStoreSpecialProducts = () => {
+        if (!storeSpecialProductsList || !storeSpecialProductsHelper) return;
+
+        const isReadyMode = storeSpecialSelectionMode === 'ready';
+        const enabled = isReadyMode
+            ? Boolean(storeReadyMealsEnabledInput?.checked)
+            : Boolean(storeFeaturedProductsEnabledInput?.checked);
+        const selectedIds = new Set(isReadyMode ? storeSpecialReadyMealIds : storeSpecialFeaturedIds);
+
+        storeSpecialProductsList.innerHTML = '';
+
+        if (!editingStoreId) {
+            storeSpecialProductsHelper.textContent = 'Taze magazynda onden haryt saylap bolmayar. Ilki magazyny saklan.';
+            return;
+        }
+
+        if (!enabled) {
+            storeSpecialProductsHelper.textContent = isReadyMode
+                ? 'Tayyn naharlar aktif edilmedik.'
+                : 'Meshhurlar aktif edilmedik.';
+            return;
+        }
+
+        if (!Array.isArray(storeSpecialProducts) || storeSpecialProducts.length === 0) {
+            storeSpecialProductsHelper.textContent = 'Bu magazyn ucin haryt tapylmady.';
+            return;
+        }
+
+        storeSpecialProductsHelper.textContent = isReadyMode
+            ? 'Tayyn nahar boluminde gorsenjek harytlary saylan.'
+            : 'Meshhur boluminde gorsenjek harytlary saylan.';
+
+        const fragment = document.createDocumentFragment();
+        storeSpecialProducts.forEach((product) => {
+            const row = document.createElement('label');
+            row.className = 'store-special-product-item';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = selectedIds.has(product.id);
+            checkbox.addEventListener('change', () => {
+                const targetList = isReadyMode ? storeSpecialReadyMealIds : storeSpecialFeaturedIds;
+                const next = new Set(targetList);
+                if (checkbox.checked) next.add(product.id);
+                else next.delete(product.id);
+                if (isReadyMode) {
+                    storeSpecialReadyMealIds = Array.from(next);
+                } else {
+                    storeSpecialFeaturedIds = Array.from(next);
+                }
+            });
+
+            const text = document.createElement('span');
+            text.className = 'store-special-product-label';
+            text.textContent = normalizeSpecialProductName(product) || '(Adsiz haryt)';
+
+            row.appendChild(checkbox);
+            row.appendChild(text);
+            fragment.appendChild(row);
+        });
+        storeSpecialProductsList.appendChild(fragment);
+    };
+
+    const loadStoreSpecialProducts = async (storeId) => {
+        if (!storeSpecialProductsHelper) return;
+        if (!storeId) {
+            storeSpecialProducts = [];
+            renderStoreSpecialProducts();
+            return;
+        }
+        storeSpecialProductsHelper.textContent = 'Magazyn harytlary yuklenyar...';
+        try {
+            const products = await window.showlyDB.getProducts(storeId);
+            storeSpecialProducts = sortSpecialProductsAlphabetically(Array.isArray(products) ? products : []);
+        } catch (error) {
+            console.error('Store special products load failed:', error);
+            storeSpecialProducts = [];
+            storeSpecialProductsHelper.textContent = 'Harytlar yuklenip bolmady.';
+        }
+        renderStoreSpecialProducts();
+    };
+
+    const resetStoreSpecialSettingsUI = () => {
+        storeSpecialSelectionMode = 'ready';
+        storeSpecialProducts = [];
+        storeSpecialFeaturedIds = [];
+        storeSpecialReadyMealIds = [];
+        if (storeFeaturedProductsEnabledInput) storeFeaturedProductsEnabledInput.checked = false;
+        if (storeReadyMealsEnabledInput) storeReadyMealsEnabledInput.checked = false;
+        syncStoreSpecialTabs();
+        renderStoreSpecialProducts();
+    };
+
+    storeSpecialTabReady?.addEventListener('click', () => {
+        storeSpecialSelectionMode = 'ready';
+        syncStoreSpecialTabs();
+        renderStoreSpecialProducts();
+    });
+
+    storeSpecialTabFeatured?.addEventListener('click', () => {
+        storeSpecialSelectionMode = 'featured';
+        syncStoreSpecialTabs();
+        renderStoreSpecialProducts();
+    });
+
+    storeFeaturedProductsEnabledInput?.addEventListener('change', () => {
+        if (!storeFeaturedProductsEnabledInput.checked) {
+            storeSpecialFeaturedIds = [];
+        }
+        renderStoreSpecialProducts();
+    });
+
+    storeReadyMealsEnabledInput?.addEventListener('change', () => {
+        if (!storeReadyMealsEnabledInput.checked) {
+            storeSpecialReadyMealIds = [];
+        }
+        renderStoreSpecialProducts();
+    });
+
+    syncStoreSpecialTabs();
+    renderStoreSpecialProducts();
+
     const editStore = async (storeId) => {
         const stores = await window.showlyDB.getStores();
         const store = stores.find(s => s.id === storeId);
@@ -667,6 +815,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasBronCheckbox) {
             hasBronCheckbox.checked = store.hasBron || false;
         }
+        if (storeFeaturedProductsEnabledInput) {
+            storeFeaturedProductsEnabledInput.checked = store.featuredProductsEnabled === true;
+        }
+        if (storeReadyMealsEnabledInput) {
+            storeReadyMealsEnabledInput.checked = store.readyMealProductsEnabled === true;
+        }
+        storeSpecialFeaturedIds = Array.isArray(store.featuredProductIds) ? [...new Set(store.featuredProductIds)] : [];
+        storeSpecialReadyMealIds = Array.isArray(store.readyMealProductIds) ? [...new Set(store.readyMealProductIds)] : [];
+        storeSpecialSelectionMode = 'ready';
+        syncStoreSpecialTabs();
 
         if (storeSchemaPreview) {
             if (store.restaurantSchemaUrl) {
@@ -682,6 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         storeModal.style.display = 'block';
         editingStoreId = storeId;
+        await loadStoreSpecialProducts(storeId);
     };
 
     // Mağaza sil
@@ -1198,6 +1357,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const orderPhone = document.getElementById('store-order-phone')?.value.trim() || '';
         const hasReservation = document.getElementById('store-has-reservation')?.checked || false;
         const hasBron = document.getElementById('store-has-bron')?.checked || false; // ✅ YENİ
+        const featuredProductsEnabled = storeFeaturedProductsEnabledInput?.checked || false;
+        const readyMealProductsEnabled = storeReadyMealsEnabledInput?.checked || false;
+        const sortSelectedIdsByProductName = (ids) => {
+            const selected = new Set(ids || []);
+            return storeSpecialProducts
+                .filter((product) => selected.has(product.id))
+                .map((product) => product.id);
+        };
+        const featuredProductIds = featuredProductsEnabled ? sortSelectedIdsByProductName([...new Set(storeSpecialFeaturedIds)]) : [];
+        const readyMealProductIds = readyMealProductsEnabled ? sortSelectedIdsByProductName([...new Set(storeSpecialReadyMealIds)]) : [];
         const schemaFile = storeSchemaImage?.files[0]; // ✅ YENİ
 
         if (!name) {
@@ -1236,7 +1405,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     orderPhone,
                     hasReservation,
                     hasBron, // ✅ YENİ
-                    restaurantSchemaUrl // ✅ YENİ
+                    restaurantSchemaUrl, // ✅ YENİ
+                    featuredProductsEnabled,
+                    featuredProductIds,
+                    readyMealProductsEnabled,
+                    readyMealProductIds
                 });
                 showNotification('Mağaza güncellendi!');
             } else {
@@ -1253,7 +1426,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     orderPhone,
                     hasReservation,
                     hasBron, // ✅ YENİ
-                    restaurantSchemaUrl // ✅ YENİ
+                    restaurantSchemaUrl, // ✅ YENİ
+                    featuredProductsEnabled,
+                    featuredProductIds,
+                    readyMealProductsEnabled,
+                    readyMealProductIds
                 });
                 showNotification('Mağaza eklendi!');
             }
@@ -2720,6 +2897,7 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadedProductImageUrl = null;
         editingPackageId = null;
         isSubmitting = false;
+        resetStoreSpecialSettingsUI();
     };
 
 
@@ -3091,6 +3269,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Mağaza Ekle butonuna tıklandı');
             e.preventDefault();
             openStoreModal();
+            resetStoreSpecialSettingsUI();
         });
     } else {
         console.error('Mağaza Ekle butonu bulunamadı!');
@@ -3102,6 +3281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addStoreBtnMobile.addEventListener('click', (e) => {
             e.preventDefault();
             openStoreModal();
+            resetStoreSpecialSettingsUI();
         });
     }
 

@@ -781,6 +781,30 @@
                         <input type="hidden" id="store-schema-url">
                     </div>
 
+                    <div class="form-group store-special-settings-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="store-featured-products-enabled">
+                            <span>Bu magazynda Meshhurlar bar</span>
+                        </label>
+                    </div>
+                    <div class="form-group store-special-settings-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="store-ready-meals-enabled">
+                            <span>Bu magazynda Tayyn naharlar bar</span>
+                        </label>
+                    </div>
+                    <div class="form-group store-special-settings-group">
+                        <label>Yorite bolum harytlary</label>
+                        <div class="store-special-tabs">
+                            <button type="button" id="store-special-tab-ready" class="store-special-tab active">Tayyn naharlar</button>
+                            <button type="button" id="store-special-tab-featured" class="store-special-tab">Meshhurlar</button>
+                        </div>
+                        <div id="store-special-products-helper" class="store-special-helper">
+                            Magazyn harytlary yuklenyar...
+                        </div>
+                        <div id="store-special-products-list" class="store-special-products-list"></div>
+                    </div>
+
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="cancel-store">Aýyr</button>
                         <button type="submit" class="btn-primary">Ýatda sakla</button>

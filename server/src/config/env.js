@@ -7,6 +7,13 @@ const rootDir = path.resolve(__dirname, '..', '..', '..');
 const defaultUploadDir = process.platform === 'win32'
   ? path.join(rootDir, 'uploads')
   : '/var/www/uploads';
+const corsOriginRaw = process.env.CORS_ORIGIN || '*';
+const corsOrigin = corsOriginRaw === '*'
+  ? '*'
+  : corsOriginRaw
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 
 module.exports = {
   rootDir,
@@ -16,7 +23,7 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || 'change-me',
   uploadDir: process.env.UPLOAD_DIR || defaultUploadDir,
   publicUploadBase: process.env.PUBLIC_UPLOAD_BASE || '/uploads',
-  corsOrigin: process.env.CORS_ORIGIN || '*',
+  corsOrigin,
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || ''
 };

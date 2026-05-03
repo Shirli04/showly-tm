@@ -29,7 +29,28 @@ const { sendNewOrderNotification } = require('./services/fcm');
 
 const app = express();
 
-app.use(cors({ origin: env.corsOrigin === '*' ? true : env.corsOrigin, credentials: true }));
+const corsOptions = {
+  credentials: true,
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (env.corsOrigin === '*') {
+      return callback(null, true);
+    }
+
+    const allowList = Array.isArray(env.corsOrigin) ? env.corsOrigin : [env.corsOrigin];
+    if (allowList.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new HttpError(403, `CORS blocked for origin: ${origin}`));
+  }
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
