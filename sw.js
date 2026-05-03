@@ -1,4 +1,4 @@
-const CACHE_NAME = 'showly-offline-v2';
+const CACHE_NAME = 'showly-offline-v3';
 const IMG_CACHE_NAME = 'showly-images-v1';
 
 const ASSETS_TO_CACHE = [
@@ -7,9 +7,12 @@ const ASSETS_TO_CACHE = [
     '/style.css',
     '/assets/logo.png',
     '/script.js',
+    '/language.js',
     '/firebase-config.js',
     '/r2-config.js',
-    '/vendor/fontawesome/css/all.min.css'
+    '/vendor/fontawesome/css/all.min.css',
+    '/vendor/fontawesome/webfonts/fa-solid-900.woff2',
+    '/vendor/fontawesome/webfonts/fa-solid-900.ttf'
 ];
 
 // Install Event: Cache essential files
@@ -82,12 +85,28 @@ self.addEventListener('fetch', event => {
         return;
     }
 
+    // Statik kaynaklar: 5xx durumunda cache fallback
+    const staticAssetRegex = /\.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|webp)$/i;
+    const sameOrigin = event.request.url.startsWith(self.location.origin);
+
     // Diğer istekler: Network-first stratejisi
     event.respondWith(
         (async () => {
             try {
                 // 1. Önce her zaman Ağdan (Network) canlı veriyi çekmeyi dene
                 const networkResponse = await fetch(event.request);
+
+                // 1.1 Cloudflare/VPN kaynaklı 5xx olursa cache'ten dön
+                if (!networkResponse.ok && networkResponse.status >= 500) {
+                    const cached = await caches.match(event.request);
+                    if (cached) return cached;
+                }
+
+                // 1.2 Aynı origin statik dosyaları başarılı geldikçe güncel cache'e yaz
+                if (networkResponse.ok && sameOrigin && staticAssetRegex.test(new URL(event.request.url).pathname)) {
+                    const cache = await caches.open(CACHE_NAME);
+                    cache.put(event.request, networkResponse.clone());
+                }
 
                 // 2. SPA UYUMU (Safari Yönlendirme Hatasının Ana Çözümü)
                 if (event.request.mode === 'navigate' && networkResponse.status === 404) {
