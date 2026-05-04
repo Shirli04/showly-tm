@@ -113,8 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
         } catch (error) {
-            const targetUrl = `https://direct.showlytm.store${window.location.pathname}${window.location.search}${window.location.hash}`;
-            window.location.replace(targetUrl);
+            console.warn('API health check geçici olarak başarısız. URL değiştirilmeden devam ediliyor.', error);
         } finally {
             clearTimeout(timeoutId);
         }
@@ -272,18 +271,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function fetchAndCacheData(onlyStores = false) {
         console.log('🔄 Temel veriler local API üzerinden yükleniyor...');
 
+        const fetchApiJson = async (path) => {
+            const requestOptions = { method: 'GET', cache: 'no-cache' };
+            const response = await fetch(path, requestOptions);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return await response.json();
+        };
+
         const fetchCatalog = async () => {
             if (!window.db) throw new Error('API bridge bulunamadı');
-            const response = await fetch('/api/catalog/bootstrap', {
-                method: 'GET',
-                cache: 'no-cache'
-            });
-
-            if (!response.ok) {
-                throw new Error(`Bootstrap HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
+            const data = await fetchApiJson('/api/catalog/bootstrap');
             return {
                 stores: data.stores || [],
                 parentCategories: data.parentCategories || [],
@@ -3521,13 +3518,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.onLanguageChange(handleLanguageChange);
     } else {
         console.error('❌ language.js yüklenemedi veya Cloudflare tarafından engellendi.');
-        const host = window.location.hostname;
-        const isShowlyDomain = host === 'showlytm.store' || host === 'www.showlytm.store';
-        const isDirectHost = host === 'direct.showlytm.store';
-        if (isShowlyDomain && !isDirectHost) {
-            const targetUrl = `https://direct.showlytm.store${window.location.pathname}${window.location.search}${window.location.hash}`;
-            window.location.replace(targetUrl);
-        }
+        showNotification('Dil dosyası yüklenemedi. Sayfayı yenileyin.', false);
     }
 
     // ✅ YENİ: Service Worker Kaydı (Çevrimdışı / Offline Destek)

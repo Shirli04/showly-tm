@@ -48,18 +48,8 @@
         }
     }
 
-    async function apiRequest(url, options) {
-        const headers = new Headers(options && options.headers ? options.headers : {});
-        if (!headers.has('Content-Type') && !(options && options.body instanceof FormData)) {
-            headers.set('Content-Type', 'application/json');
-        }
-
-        const token = getToken();
-        if (token) {
-            headers.set('Authorization', `Bearer ${token}`);
-        }
-
-        const response = await fetch(url, {
+    async function executeApiRequest(targetUrl, options, headers) {
+        const response = await fetch(targetUrl, {
             ...options,
             headers
         });
@@ -84,6 +74,20 @@
         }
 
         return payload;
+    }
+
+    async function apiRequest(url, options) {
+        const headers = new Headers(options && options.headers ? options.headers : {});
+        if (!headers.has('Content-Type') && !(options && options.body instanceof FormData)) {
+            headers.set('Content-Type', 'application/json');
+        }
+
+        const token = getToken();
+        if (token) {
+            headers.set('Authorization', `Bearer ${token}`);
+        }
+
+        return executeApiRequest(url, options, headers);
     }
 
     function makeDocSnapshot(ref, raw) {
