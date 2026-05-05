@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const FEATURED_CATEGORY_TITLE = 'Meşhurlar';
     const FEATURED_CACHE_TTL = 30000;
     const READY_MEALS_CACHE_TTL = 30000;
-    const STOPLIST_BUTTON_LABEL = 'Stoplist';
+    const STOPLIST_BUTTON_LABEL = 'El\u00FDeter d\u00E4l';
     const featuredProductsCache = {};
     const readyMealProductsCache = {};
     const stoplistIdsCache = {};
@@ -1880,7 +1880,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('🛒 Sepete ekle çalışıyor:', product);
 
         if (isProductStoplisted(product)) {
-            showNotification('Bu haryt wagtlayyn stoplistde.', false);
+            showNotification('Bu haryt gutardy.', false);
             return false;
         }
 
@@ -2042,7 +2042,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const product = findProductById(productId);
             if (!product) return;
             if (isProductStoplisted(product)) {
-                showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                showNotification('Bu haryt gutardy.', false);
                 return;
             }
 
@@ -2074,7 +2074,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const product = findProductById(productId);
             if (product) {
                 if (isProductStoplisted(product)) {
-                    showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                    showNotification('Bu haryt gutardy.', false);
                     return;
                 }
                 addToCart(product); // addToCart mevcut ürünü bulup quantity++ yapar
@@ -2236,7 +2236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const product = findProductById(productId);
             if (product) {
                 if (isProductStoplisted(product)) {
-                    showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                    showNotification('Bu haryt gutardy.', false);
                     return;
                 }
                 addToCart(product);
@@ -2252,7 +2252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const product = findProductById(productId);
         if (product) {
             if (isProductStoplisted(product)) {
-                showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                showNotification('Bu haryt gutardy.', false);
                 return;
             }
             addToCart(product);
@@ -2694,7 +2694,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const product = favorites.find(f => f.id === e.target.getAttribute('data-id'));
             if (product) {
                 if (isProductStoplisted(product)) {
-                    showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                    showNotification('Bu haryt gutardy.', false);
                     return;
                 }
                 addToCart(product);
@@ -3674,4 +3674,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+
+
 

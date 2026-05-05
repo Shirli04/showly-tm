@@ -2078,24 +2078,25 @@ header {
 /* ================================ BİLDİRİM ================================ */
 .notification {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
     background-color: var(--primary-color);
     color: white;
     padding: 0;
     border-radius: 6px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
+    z-index: 10000;
     opacity: 0;
-    transform: translateY(20px);
+    transform: translate(-50%, -20px);
     transition: all 0.3s ease;
     overflow: hidden;
     max-width: 350px;
+    width: calc(100vw - 32px);
 }
 
 .notification.show {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(-50%, 0);
 }
 
 .notification-content {
@@ -2506,8 +2507,8 @@ header {
     }
 
     .notification {
-        max-width: 90vw;
-        width: 90vw;
+        max-width: 94vw;
+        width: 94vw;
     }
 
     .close-modal {
