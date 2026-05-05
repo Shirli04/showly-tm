@@ -64,8 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const FEATURED_CATEGORY_TITLE = 'Meşhurlar';
     const FEATURED_CACHE_TTL = 30000;
     const READY_MEALS_CACHE_TTL = 30000;
+    const STOPLIST_BUTTON_LABEL = 'Stoplist';
     const featuredProductsCache = {};
     const readyMealProductsCache = {};
+    const stoplistIdsCache = {};
     window.isInitialLoadComplete = false;
 
     // SMS URL açma fonksiyonu
@@ -294,6 +296,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const result = await fetchCatalog();
 
             allStores = result.stores;
+            clearStoplistCache();
             window.allParentCategories = result.parentCategories;
             window.allSubcategories = result.subcategories;
             window.allOldCategories = result.categories;
@@ -1044,6 +1047,69 @@ document.addEventListener('DOMContentLoaded', async () => {
         return products;
     }
 
+    function getStoplistIdSetForStore(storeId) {
+        if (!storeId) return new Set();
+        const cached = stoplistIdsCache[storeId];
+        if (cached) return cached;
+
+        const store = allStores.find((item) => String(item.id) === String(storeId));
+        const enabled = Boolean(store?.stoplistProductsEnabled);
+        const rawIds = Array.isArray(store?.stoplistProductIds) ? store.stoplistProductIds : [];
+        const set = new Set();
+
+        if (enabled) {
+            rawIds.forEach((rawId) => {
+                const id = String(rawId || '').trim();
+                if (id) set.add(id);
+            });
+        }
+
+        stoplistIdsCache[storeId] = set;
+        return set;
+    }
+
+    function clearStoplistCache(storeId) {
+        if (storeId) {
+            delete stoplistIdsCache[storeId];
+            return;
+        }
+        Object.keys(stoplistIdsCache).forEach((key) => delete stoplistIdsCache[key]);
+    }
+
+    function isProductStoplisted(product) {
+        if (!product || !product.storeId || !product.id) return false;
+        const stoplistIds = getStoplistIdSetForStore(product.storeId);
+        return stoplistIds.has(String(product.id));
+    }
+
+    function applyStoplistStateToCard(productCard, product, lang) {
+        if (!productCard || !product) return;
+        const btnCart = productCard.querySelector('.btn-cart');
+        const qtyContainer = productCard.querySelector('.quantity-control-container');
+        const isStoplisted = isProductStoplisted(product);
+
+        if (!btnCart) return;
+
+        if (isStoplisted) {
+            btnCart.disabled = true;
+            btnCart.classList.remove('hidden');
+            btnCart.classList.add('btn-stoplist');
+            btnCart.innerHTML = `<i class="fas fa-ban"></i> ${STOPLIST_BUTTON_LABEL}`;
+            if (qtyContainer) {
+                qtyContainer.classList.remove('active');
+                qtyContainer.style.display = 'none';
+            }
+            return;
+        }
+
+        btnCart.disabled = false;
+        btnCart.classList.remove('btn-stoplist');
+        btnCart.innerHTML = `<i class="fas fa-shopping-cart"></i> ${translate('add_to_cart', lang)}`;
+        if (qtyContainer) {
+            qtyContainer.style.display = '';
+        }
+    }
+
     const renderStorePage = async (storeId, activeFilter = null, forceRebuild = false) => {
         currentActiveFilter = activeFilter; // ✅ Global filtreyi güncelle
         window._currentActiveFilter = activeFilter; // ✅ Arka plan callback'i için de güncelle
@@ -1323,6 +1389,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     priceSpan.textContent = product.price;
                     wrapper.appendChild(priceSpan);
                 }
+
+                applyStoplistStateToCard(productCard, product, _lang);
 
                 const imgEl = productCard.querySelector('.product-img');
                 const skeletonEl = productCard.querySelector('.img-skeleton');
@@ -1802,6 +1870,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addToCart = (product) => {
         console.log('🛒 Sepete ekle çalışıyor:', product);
 
+        if (isProductStoplisted(product)) {
+            showNotification('Bu haryt wagtlayyn stoplistde.', false);
+            return false;
+        }
+
         const store = allStores.find(s => s.id === product.storeId);
         if (!store) {
             console.error('❌ Mağaza bulunamadı:', product.storeId);
@@ -1959,6 +2032,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const productId = cartBtn.getAttribute('data-id');
             const product = allProducts.find(p => p.id === productId);
             if (!product) return;
+            if (isProductStoplisted(product)) {
+                showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                return;
+            }
 
             // Ürünü Sepete Ekle
             addToCart(product);
@@ -1987,6 +2064,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const productId = container.getAttribute('data-id');
             const product = allProducts.find(p => p.id === productId);
             if (product) {
+                if (isProductStoplisted(product)) {
+                    showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                    return;
+                }
                 addToCart(product); // addToCart mevcut ürünü bulup quantity++ yapar
                 const storeCart = cart[product.storeId] || { items: [] };
                 const item = storeCart.items.find(i => i.id === productId);
@@ -2145,6 +2226,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const productId = modal.getAttribute('data-product-id');
             const product = allProducts.find(p => p.id === productId);
             if (product) {
+                if (isProductStoplisted(product)) {
+                    showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                    return;
+                }
                 addToCart(product);
                 history.back();
             }
@@ -2157,6 +2242,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const productId = modal.getAttribute('data-product-id');
         const product = allProducts.find(p => p.id === productId);
         if (product) {
+            if (isProductStoplisted(product)) {
+                showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                return;
+            }
             addToCart(product);
             // Modal'ı kapat (History back ile)
             history.back();
@@ -2595,6 +2684,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target.classList.contains('btn-add-cart-from-fav')) {
             const product = favorites.find(f => f.id === e.target.getAttribute('data-id'));
             if (product) {
+                if (isProductStoplisted(product)) {
+                    showNotification('Bu haryt wagtlayyn stoplistde.', false);
+                    return;
+                }
                 addToCart(product);
                 // Burayı kapatmak istersen: document.getElementById('favorites-modal').style.display = 'none';
             }
@@ -2652,12 +2745,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ✅ YENİ: Başlatıldığında Sepeti UI'ya Uygula
     function restoreCartUI(storeId) {
-        if (!storeId || !cart[storeId]) return;
+        if (!storeId) return;
+        const storeCards = document.querySelectorAll(`.product-card[data-store-id="${storeId}"]`);
+        storeCards.forEach((card) => {
+            const productId = card.getAttribute('data-product-id');
+            const product = allProducts.find((item) => String(item.id) === String(productId));
+            if (product) {
+                applyStoplistStateToCard(card, product, getSelectedLang());
+            }
+        });
+        if (!cart[storeId]) return;
+        cart[storeId].items = cart[storeId].items.filter((item) => !isProductStoplisted(item));
         const currentStoreCart = cart[storeId].items;
+        saveCart();
 
         currentStoreCart.forEach(item => {
             const productCard = document.querySelector(`.product-card[data-product-id="${item.id}"]`);
             if (productCard) {
+                if (isProductStoplisted(item)) return;
                 const btnCart = productCard.querySelector('.btn-cart');
                 const qtyContainer = productCard.querySelector('.quantity-control-container');
                 if (btnCart && qtyContainer) {
@@ -2675,8 +2780,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         storeCards.forEach(card => {
             const btnCart = card.querySelector('.btn-cart');
             const qtyContainer = card.querySelector('.quantity-control-container');
+            const productId = card.getAttribute('data-product-id');
+            const product = allProducts.find((item) => String(item.id) === String(productId));
             if (qtyContainer) qtyContainer.classList.remove('active');
             if (btnCart) btnCart.classList.remove('hidden');
+            if (product) applyStoplistStateToCard(card, product, getSelectedLang());
         });
     }
 
@@ -2784,6 +2892,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (materialRow) materialRow.style.display = 'block';
         } else {
             if (materialRow) materialRow.style.display = 'none';
+        }
+
+        const modalAddButton = document.getElementById('modal-add-cart');
+        if (modalAddButton) {
+            const stoplisted = isProductStoplisted(product);
+            modalAddButton.disabled = stoplisted;
+            if (stoplisted) {
+                modalAddButton.textContent = STOPLIST_BUTTON_LABEL;
+                modalAddButton.classList.add('btn-stoplist');
+            } else {
+                modalAddButton.textContent = translate('add_to_cart', getSelectedLang());
+                modalAddButton.classList.remove('btn-stoplist');
+            }
         }
 
         modal.style.display = 'block';
@@ -3353,7 +3474,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (categoryEl) categoryEl.textContent = getProductField(product, 'category', newLang) || '';
 
             const cartBtn = card.querySelector('.btn-cart');
-            if (cartBtn) cartBtn.textContent = translate('add_to_cart', newLang);
+            if (cartBtn) {
+                const stoplisted = isProductStoplisted(product);
+                cartBtn.disabled = stoplisted;
+                cartBtn.classList.toggle('btn-stoplist', stoplisted);
+                cartBtn.innerHTML = stoplisted
+                    ? `<i class="fas fa-ban"></i> ${STOPLIST_BUTTON_LABEL}`
+                    : `<i class="fas fa-shopping-cart"></i> ${translate('add_to_cart', newLang)}`;
+            }
 
             const badge = card.querySelector('.discount-badge');
             if (badge) badge.textContent = translate('discount', newLang);
@@ -3423,7 +3551,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (materialLabel) materialLabel.textContent = translate('material_label', newLang);
 
                     const modalCartBtn = document.getElementById('modal-add-cart');
-                    if (modalCartBtn) modalCartBtn.textContent = translate('add_to_cart', newLang);
+                    if (modalCartBtn) {
+                        const stoplisted = isProductStoplisted(product);
+                        modalCartBtn.disabled = stoplisted;
+                        modalCartBtn.textContent = stoplisted ? STOPLIST_BUTTON_LABEL : translate('add_to_cart', newLang);
+                        modalCartBtn.classList.toggle('btn-stoplist', stoplisted);
+                    }
 
                     const modalBadge = document.getElementById('modal-discount-badge');
                     if (modalBadge && modalBadge.style.display !== 'none') {
@@ -3450,6 +3583,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (cachedData && !isDirectStoreAccess) {
             allStores = cachedData.stores || [];
+            clearStoplistCache();
             allProducts = cachedData.products || [];
             window.allParentCategories = cachedData.parentCategories || [];
             window.allSubcategories = cachedData.subcategories || [];
@@ -3464,6 +3598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (isDirectStoreAccess) {
             if (cachedData) {
                 allStores = cachedData.stores || [];
+                clearStoplistCache();
                 allProducts = cachedData.products || [];
                 window.allParentCategories = cachedData.parentCategories || [];
                 window.allSubcategories = cachedData.subcategories || [];

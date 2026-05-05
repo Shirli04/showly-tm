@@ -1101,6 +1101,20 @@ header {
     transform: scale(0.97) translateY(0);
 }
 
+.btn-cart.btn-stoplist,
+#modal-add-cart.btn-stoplist {
+    background: #cfd6df;
+    color: #3f4a5a;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-cart.btn-stoplist:hover,
+#modal-add-cart.btn-stoplist:hover {
+    transform: none;
+    box-shadow: none;
+}
+
 .btn-cart i {
     font-size: 16px;
 }

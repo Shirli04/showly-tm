@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS stores (
     featured_product_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     ready_meal_products_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     ready_meal_product_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    stoplist_products_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    stoplist_product_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     tables JSONB NOT NULL DEFAULT '[]'::jsonb,
     views INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

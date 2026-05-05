@@ -49,6 +49,14 @@ async function runMigrations() {
       ADD COLUMN IF NOT EXISTS fcm_tokens TEXT[] DEFAULT ARRAY[]::TEXT[];
   `);
   await pool.query(`
+    ALTER TABLE stores
+      ADD COLUMN IF NOT EXISTS stoplist_products_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+  await pool.query(`
+    ALTER TABLE stores
+      ADD COLUMN IF NOT EXISTS stoplist_product_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_users_store_id ON users(store_id);
   `);
 }

@@ -75,6 +75,8 @@ function normalizeStore(row) {
     featuredProductIds: ensureArray(row.featured_product_ids),
     readyMealProductsEnabled: row.ready_meal_products_enabled,
     readyMealProductIds: ensureArray(row.ready_meal_product_ids),
+    stoplistProductsEnabled: row.stoplist_products_enabled,
+    stoplistProductIds: ensureArray(row.stoplist_product_ids),
     tables: ensureArray(row.tables),
     views: row.views || 0,
     createdAt: row.created_at,
@@ -413,6 +415,8 @@ async function upsertStore(payload, id) {
     featuredProductIds: ensureArray(source.featuredProductIds),
     readyMealProductsEnabled: Boolean(source.readyMealProductsEnabled),
     readyMealProductIds: ensureArray(source.readyMealProductIds),
+    stoplistProductsEnabled: Boolean(source.stoplistProductsEnabled),
+    stoplistProductIds: ensureArray(source.stoplistProductIds),
     tables: ensureArray(source.tables),
     viewsIncrement: data.views && data.views.__increment ? Number(data.views.__increment) : 0,
     viewsValue: typeof data.views === 'number' ? data.views : (current ? current.views : null)
@@ -429,6 +433,7 @@ async function upsertStore(payload, id) {
       has_reservation, has_bron, restaurant_schema_url,
       featured_products_enabled, featured_product_ids,
       ready_meal_products_enabled, ready_meal_product_ids,
+      stoplist_products_enabled, stoplist_product_ids,
       tables, views
     ) VALUES (
       COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
@@ -436,7 +441,8 @@ async function upsertStore(payload, id) {
       $13, $14, $15,
       $16, $17::jsonb,
       $18, $19::jsonb,
-      $20::jsonb, COALESCE($21, 0)
+      $20, $21::jsonb,
+      $22::jsonb, COALESCE($23, 0)
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
@@ -457,10 +463,12 @@ async function upsertStore(payload, id) {
       featured_product_ids = EXCLUDED.featured_product_ids,
       ready_meal_products_enabled = EXCLUDED.ready_meal_products_enabled,
       ready_meal_product_ids = EXCLUDED.ready_meal_product_ids,
+      stoplist_products_enabled = EXCLUDED.stoplist_products_enabled,
+      stoplist_product_ids = EXCLUDED.stoplist_product_ids,
       tables = EXCLUDED.tables,
       views = CASE
-        WHEN $22 <> 0 THEN stores.views + $22
-        WHEN $21 IS NOT NULL THEN $21
+        WHEN $24 <> 0 THEN stores.views + $24
+        WHEN $23 IS NOT NULL THEN $23
         ELSE stores.views
       END,
       updated_at = NOW()
@@ -485,6 +493,8 @@ async function upsertStore(payload, id) {
     JSON.stringify(normalized.featuredProductIds),
     normalized.readyMealProductsEnabled,
     JSON.stringify(normalized.readyMealProductIds),
+    normalized.stoplistProductsEnabled,
+    JSON.stringify(normalized.stoplistProductIds),
     JSON.stringify(normalized.tables),
     normalized.viewsValue,
     normalized.viewsIncrement

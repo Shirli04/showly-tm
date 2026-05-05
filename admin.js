@@ -171,8 +171,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const storeSchemaUrl = document.getElementById('store-schema-url');
     const storeFeaturedProductsEnabledInput = document.getElementById('store-featured-products-enabled');
     const storeReadyMealsEnabledInput = document.getElementById('store-ready-meals-enabled');
+    const storeStoplistEnabledInput = document.getElementById('store-stoplist-enabled');
     const storeSpecialTabReady = document.getElementById('store-special-tab-ready');
     const storeSpecialTabFeatured = document.getElementById('store-special-tab-featured');
+    const storeSpecialTabStoplist = document.getElementById('store-special-tab-stoplist');
     const storeSpecialProductsList = document.getElementById('store-special-products-list');
     const storeSpecialProductsHelper = document.getElementById('store-special-products-helper');
 
@@ -184,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let storeSpecialProducts = [];
     let storeSpecialFeaturedIds = [];
     let storeSpecialReadyMealIds = [];
+    let storeSpecialStoplistIds = [];
 
     // Form gönderme kontrolü
     let isSubmitting = false;
@@ -646,19 +649,29 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const syncStoreSpecialTabs = () => {
-        if (!storeSpecialTabReady || !storeSpecialTabFeatured) return;
+        if (!storeSpecialTabReady || !storeSpecialTabFeatured || !storeSpecialTabStoplist) return;
         storeSpecialTabReady.classList.toggle('active', storeSpecialSelectionMode === 'ready');
         storeSpecialTabFeatured.classList.toggle('active', storeSpecialSelectionMode === 'featured');
+        storeSpecialTabStoplist.classList.toggle('active', storeSpecialSelectionMode === 'stoplist');
     };
 
     const renderStoreSpecialProducts = () => {
         if (!storeSpecialProductsList || !storeSpecialProductsHelper) return;
 
         const isReadyMode = storeSpecialSelectionMode === 'ready';
+        const isStoplistMode = storeSpecialSelectionMode === 'stoplist';
         const enabled = isReadyMode
             ? Boolean(storeReadyMealsEnabledInput?.checked)
-            : Boolean(storeFeaturedProductsEnabledInput?.checked);
-        const selectedIds = new Set(isReadyMode ? storeSpecialReadyMealIds : storeSpecialFeaturedIds);
+            : isStoplistMode
+                ? Boolean(storeStoplistEnabledInput?.checked)
+                : Boolean(storeFeaturedProductsEnabledInput?.checked);
+        const selectedIds = new Set((
+            isReadyMode
+                ? storeSpecialReadyMealIds
+                : isStoplistMode
+                    ? storeSpecialStoplistIds
+                    : storeSpecialFeaturedIds
+        ).map((id) => String(id)));
 
         storeSpecialProductsList.innerHTML = '';
 
@@ -670,7 +683,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!enabled) {
             storeSpecialProductsHelper.textContent = isReadyMode
                 ? 'Tayyn naharlar aktif edilmedik.'
-                : 'Meshhurlar aktif edilmedik.';
+                : isStoplistMode
+                    ? 'Stoplist aktif edilmedik.'
+                    : 'Meshhurlar aktif edilmedik.';
             return;
         }
 
@@ -681,7 +696,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         storeSpecialProductsHelper.textContent = isReadyMode
             ? 'Tayyn nahar boluminde gorsenjek harytlary saylan.'
-            : 'Meshhur boluminde gorsenjek harytlary saylan.';
+            : isStoplistMode
+                ? 'Stoplist boluminde satylmajak harytlary saylan.'
+                : 'Meshhur boluminde gorsenjek harytlary saylan.';
 
         const fragment = document.createDocumentFragment();
         storeSpecialProducts.forEach((product) => {
@@ -690,14 +707,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
-            checkbox.checked = selectedIds.has(product.id);
+            checkbox.checked = selectedIds.has(String(product.id));
             checkbox.addEventListener('change', () => {
-                const targetList = isReadyMode ? storeSpecialReadyMealIds : storeSpecialFeaturedIds;
-                const next = new Set(targetList);
-                if (checkbox.checked) next.add(product.id);
-                else next.delete(product.id);
+                const targetList = isReadyMode
+                    ? storeSpecialReadyMealIds
+                    : isStoplistMode
+                        ? storeSpecialStoplistIds
+                        : storeSpecialFeaturedIds;
+                const next = new Set(targetList.map((id) => String(id)));
+                if (checkbox.checked) next.add(String(product.id));
+                else next.delete(String(product.id));
                 if (isReadyMode) {
                     storeSpecialReadyMealIds = Array.from(next);
+                } else if (isStoplistMode) {
+                    storeSpecialStoplistIds = Array.from(next);
                 } else {
                     storeSpecialFeaturedIds = Array.from(next);
                 }
@@ -738,8 +761,10 @@ document.addEventListener('DOMContentLoaded', () => {
         storeSpecialProducts = [];
         storeSpecialFeaturedIds = [];
         storeSpecialReadyMealIds = [];
+        storeSpecialStoplistIds = [];
         if (storeFeaturedProductsEnabledInput) storeFeaturedProductsEnabledInput.checked = false;
         if (storeReadyMealsEnabledInput) storeReadyMealsEnabledInput.checked = false;
+        if (storeStoplistEnabledInput) storeStoplistEnabledInput.checked = false;
         syncStoreSpecialTabs();
         renderStoreSpecialProducts();
     };
@@ -756,6 +781,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderStoreSpecialProducts();
     });
 
+    storeSpecialTabStoplist?.addEventListener('click', () => {
+        storeSpecialSelectionMode = 'stoplist';
+        syncStoreSpecialTabs();
+        renderStoreSpecialProducts();
+    });
+
     storeFeaturedProductsEnabledInput?.addEventListener('change', () => {
         if (!storeFeaturedProductsEnabledInput.checked) {
             storeSpecialFeaturedIds = [];
@@ -766,6 +797,13 @@ document.addEventListener('DOMContentLoaded', () => {
     storeReadyMealsEnabledInput?.addEventListener('change', () => {
         if (!storeReadyMealsEnabledInput.checked) {
             storeSpecialReadyMealIds = [];
+        }
+        renderStoreSpecialProducts();
+    });
+
+    storeStoplistEnabledInput?.addEventListener('change', () => {
+        if (!storeStoplistEnabledInput.checked) {
+            storeSpecialStoplistIds = [];
         }
         renderStoreSpecialProducts();
     });
@@ -821,8 +859,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (storeReadyMealsEnabledInput) {
             storeReadyMealsEnabledInput.checked = store.readyMealProductsEnabled === true;
         }
-        storeSpecialFeaturedIds = Array.isArray(store.featuredProductIds) ? [...new Set(store.featuredProductIds)] : [];
-        storeSpecialReadyMealIds = Array.isArray(store.readyMealProductIds) ? [...new Set(store.readyMealProductIds)] : [];
+        if (storeStoplistEnabledInput) {
+            storeStoplistEnabledInput.checked = store.stoplistProductsEnabled === true;
+        }
+        storeSpecialFeaturedIds = Array.isArray(store.featuredProductIds) ? [...new Set(store.featuredProductIds.map((id) => String(id)))] : [];
+        storeSpecialReadyMealIds = Array.isArray(store.readyMealProductIds) ? [...new Set(store.readyMealProductIds.map((id) => String(id)))] : [];
+        storeSpecialStoplistIds = Array.isArray(store.stoplistProductIds) ? [...new Set(store.stoplistProductIds.map((id) => String(id)))] : [];
         storeSpecialSelectionMode = 'ready';
         syncStoreSpecialTabs();
 
@@ -1359,14 +1401,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasBron = document.getElementById('store-has-bron')?.checked || false; // ✅ YENİ
         const featuredProductsEnabled = storeFeaturedProductsEnabledInput?.checked || false;
         const readyMealProductsEnabled = storeReadyMealsEnabledInput?.checked || false;
+        const stoplistProductsEnabled = storeStoplistEnabledInput?.checked || false;
         const sortSelectedIdsByProductName = (ids) => {
-            const selected = new Set(ids || []);
+            const selected = new Set((ids || []).map((id) => String(id)));
             return storeSpecialProducts
-                .filter((product) => selected.has(product.id))
-                .map((product) => product.id);
+                .filter((product) => selected.has(String(product.id)))
+                .map((product) => String(product.id));
         };
         const featuredProductIds = featuredProductsEnabled ? sortSelectedIdsByProductName([...new Set(storeSpecialFeaturedIds)]) : [];
         const readyMealProductIds = readyMealProductsEnabled ? sortSelectedIdsByProductName([...new Set(storeSpecialReadyMealIds)]) : [];
+        const stoplistProductIds = stoplistProductsEnabled ? sortSelectedIdsByProductName([...new Set(storeSpecialStoplistIds)]) : [];
         const schemaFile = storeSchemaImage?.files[0]; // ✅ YENİ
 
         if (!name) {
@@ -1409,7 +1453,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     featuredProductsEnabled,
                     featuredProductIds,
                     readyMealProductsEnabled,
-                    readyMealProductIds
+                    readyMealProductIds,
+                    stoplistProductsEnabled,
+                    stoplistProductIds
                 });
                 showNotification('Mağaza güncellendi!');
             } else {
@@ -1430,7 +1476,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     featuredProductsEnabled,
                     featuredProductIds,
                     readyMealProductsEnabled,
-                    readyMealProductIds
+                    readyMealProductIds,
+                    stoplistProductsEnabled,
+                    stoplistProductIds
                 });
                 showNotification('Mağaza eklendi!');
             }

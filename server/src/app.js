@@ -256,6 +256,58 @@ function permissionForResource(resource) {
   return map[resource] || 'dashboard';
 }
 
+const STORE_SPECIAL_UPDATE_FIELDS = [
+  'featuredProductsEnabled',
+  'featuredProductIds',
+  'readyMealProductsEnabled',
+  'readyMealProductIds',
+  'stoplistProductsEnabled',
+  'stoplistProductIds'
+];
+
+function pickStoreSpecialUpdatePayload(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const picked = {};
+  STORE_SPECIAL_UPDATE_FIELDS.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(source, field)) {
+      picked[field] = source[field];
+    }
+  });
+  return picked;
+}
+
+function requireStoreWriteAccess(req, res, next) {
+  const user = req.user;
+  if (!user) {
+    return next(new HttpError(401, 'Authentication required'));
+  }
+
+  if (user.role === 'superadmin' || user.role === 'admin') {
+    return next();
+  }
+
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  if (permissions.includes('stores')) {
+    return next();
+  }
+
+  const isStoreUser = user.role === 'store_user';
+  const hasProductsPermission = permissions.includes('products');
+  const userStoreId = String(user.storeId || '').trim();
+  const targetStoreId = String(req.params?.id || '').trim();
+
+  if (!isStoreUser || !hasProductsPermission || !userStoreId || userStoreId !== targetStoreId) {
+    return next(new HttpError(403, 'Insufficient permissions'));
+  }
+
+  if (req.method === 'POST') {
+    return next(new HttpError(403, 'Insufficient permissions'));
+  }
+
+  req.body = pickStoreSpecialUpdatePayload(req.body);
+  return next();
+}
+
 function createCrudRoutes(basePath, resource, options = {}) {
   app.get(basePath, asyncHandler(async (req, res) => {
     res.json(await listResource(resource, req.query));
@@ -269,9 +321,11 @@ function createCrudRoutes(basePath, resource, options = {}) {
     res.json(document);
   }));
 
-  const writeGuards = options.superAdminOnly
-    ? [requireAuth, requireSuperAdmin]
-    : [requireAuth, requireRoleOrPermission(permissionForResource(resource))];
+  const writeGuards = options.writeGuards
+    ? options.writeGuards
+    : options.superAdminOnly
+      ? [requireAuth, requireSuperAdmin]
+      : [requireAuth, requireRoleOrPermission(permissionForResource(resource))];
 
   const createHandler = asyncHandler(async (req, res) => {
     const created = await upsertResource(resource, req.body);
@@ -305,7 +359,7 @@ function createCrudRoutes(basePath, resource, options = {}) {
   }));
 }
 
-createCrudRoutes('/api/stores', 'stores');
+createCrudRoutes('/api/stores', 'stores', { writeGuards: [requireAuth, requireStoreWriteAccess] });
 createCrudRoutes('/api/products', 'products');
 createCrudRoutes('/api/orders', 'orders', { publicCreate: true });
 createCrudRoutes('/api/users', 'users');
