@@ -875,8 +875,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const storeData = storeDoc.data() || {};
                 const isEnabled = storeData.featuredProductsEnabled === true;
                 const rawIds = Array.isArray(storeData.featuredProductIds) ? storeData.featuredProductIds : [];
+                const effectiveEnabled = isEnabled || rawIds.length > 0;
 
-                if (!isEnabled || rawIds.length === 0) {
+                if (!effectiveEnabled || rawIds.length === 0) {
                     featuredProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
                     return [];
                 }
@@ -884,7 +885,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const uniqueIds = [];
                 const seenIds = new Set();
                 rawIds.forEach((rawId) => {
-                    const id = typeof rawId === 'string' ? rawId.trim() : '';
+                    const id = String(rawId || '').trim();
                     if (!id || seenIds.has(id)) return;
                     seenIds.add(id);
                     uniqueIds.push(id);
@@ -906,9 +907,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (!docSnap || !docSnap.exists) return;
 
                     const productData = docSnap.data() || {};
-                    if (String(productData.storeId || '') !== String(storeId)) return;
+                    if (String(productData.storeId || '').trim() !== String(storeId).trim()) return;
 
-                    const productId = docSnap.id || uniqueIds[index];
+                    const productId = String(docSnap.id || uniqueIds[index] || '').trim();
                     if (!productId || validProductsById.has(productId)) return;
                     validProductsById.set(productId, { id: productId, ...productData });
                 });
@@ -985,8 +986,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const storeData = storeDoc.data() || {};
                 const isEnabled = storeData.readyMealProductsEnabled === true;
                 const rawIds = Array.isArray(storeData.readyMealProductIds) ? storeData.readyMealProductIds : [];
+                const effectiveEnabled = isEnabled || rawIds.length > 0;
 
-                if (!isEnabled || rawIds.length === 0) {
+                if (!effectiveEnabled || rawIds.length === 0) {
                     readyMealProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
                     return [];
                 }
@@ -994,7 +996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const uniqueIds = [];
                 const seenIds = new Set();
                 rawIds.forEach((rawId) => {
-                    const id = typeof rawId === 'string' ? rawId.trim() : '';
+                    const id = String(rawId || '').trim();
                     if (!id || seenIds.has(id)) return;
                     seenIds.add(id);
                     uniqueIds.push(id);
@@ -1016,9 +1018,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (!docSnap || !docSnap.exists) return;
 
                     const productData = docSnap.data() || {};
-                    if (String(productData.storeId || '') !== String(storeId)) return;
+                    if (String(productData.storeId || '').trim() !== String(storeId).trim()) return;
 
-                    const productId = docSnap.id || uniqueIds[index];
+                    const productId = String(docSnap.id || uniqueIds[index] || '').trim();
                     if (!productId || validProductsById.has(productId)) return;
                     validProductsById.set(productId, { id: productId, ...productData });
                 });
@@ -1055,9 +1057,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const store = allStores.find((item) => String(item.id) === String(storeId));
         const enabled = Boolean(store?.stoplistProductsEnabled);
         const rawIds = Array.isArray(store?.stoplistProductIds) ? store.stoplistProductIds : [];
+        const effectiveEnabled = enabled || rawIds.length > 0;
         const set = new Set();
 
-        if (enabled) {
+        if (effectiveEnabled) {
             rawIds.forEach((rawId) => {
                 const id = String(rawId || '').trim();
                 if (id) set.add(id);
@@ -1079,7 +1082,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     function isProductStoplisted(product) {
         if (!product || !product.storeId || !product.id) return false;
         const stoplistIds = getStoplistIdSetForStore(product.storeId);
-        return stoplistIds.has(String(product.id));
+        return stoplistIds.has(String(product.id).trim());
+    }
+
+    function findProductById(productId) {
+        const targetId = String(productId || '').trim();
+        if (!targetId) return null;
+        return allProducts.find((product) => String(product?.id || '').trim() === targetId) || null;
     }
 
     function applyStoplistStateToCard(productCard, product, lang) {
@@ -1971,7 +1980,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.stopPropagation();
             if (!touchClickExecuted) {
                 touchClickExecuted = true;
-                const product = allProducts.find(p => p.id === favBtn.getAttribute('data-id'));
+                const product = findProductById(favBtn.getAttribute('data-id'));
                 if (product) toggleFavorite(product);
             }
             return;
@@ -2006,7 +2015,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = e.target.closest('.btn-favorite');
         if (btn) {
             e.stopPropagation();
-            const product = allProducts.find(p => p.id === btn.getAttribute('data-id'));
+            const product = findProductById(btn.getAttribute('data-id'));
             if (product) toggleFavorite(product);
             return;
         }
@@ -2030,7 +2039,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.stopPropagation();
 
             const productId = cartBtn.getAttribute('data-id');
-            const product = allProducts.find(p => p.id === productId);
+            const product = findProductById(productId);
             if (!product) return;
             if (isProductStoplisted(product)) {
                 showNotification('Bu haryt wagtlayyn stoplistde.', false);
@@ -2062,7 +2071,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.stopPropagation();
             const container = addBtn.closest('.quantity-control-container');
             const productId = container.getAttribute('data-id');
-            const product = allProducts.find(p => p.id === productId);
+            const product = findProductById(productId);
             if (product) {
                 if (isProductStoplisted(product)) {
                     showNotification('Bu haryt wagtlayyn stoplistde.', false);
@@ -2224,7 +2233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.stopPropagation(); // Stop bubbling
             const modal = document.getElementById('product-modal');
             const productId = modal.getAttribute('data-product-id');
-            const product = allProducts.find(p => p.id === productId);
+            const product = findProductById(productId);
             if (product) {
                 if (isProductStoplisted(product)) {
                     showNotification('Bu haryt wagtlayyn stoplistde.', false);
@@ -2240,7 +2249,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.stopPropagation(); // Stop bubbling
         const modal = document.getElementById('product-modal');
         const productId = modal.getAttribute('data-product-id');
-        const product = allProducts.find(p => p.id === productId);
+        const product = findProductById(productId);
         if (product) {
             if (isProductStoplisted(product)) {
                 showNotification('Bu haryt wagtlayyn stoplistde.', false);
@@ -2811,7 +2820,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     function openProductModal(productId) {
-        const product = allProducts.find(p => p.id === productId);
+        const product = findProductById(productId);
         if (!product) return;
         const modal = document.getElementById('product-modal');
         modal.setAttribute('data-product-id', productId);
@@ -3665,3 +3674,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 });
+
