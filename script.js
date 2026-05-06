@@ -1813,9 +1813,15 @@
 
     const updateCartCount = () => {
         let total = 0;
-        Object.values(cart).forEach(storeCart => {
-            total += storeCart.items.reduce((sum, item) => sum + item.quantity, 0);
-        });
+        // Sadece mevcut mağazanın sepetini say
+        if (currentStoreId && cart[currentStoreId]) {
+            total = cart[currentStoreId].items.reduce((sum, item) => sum + item.quantity, 0);
+        } else {
+            // Mağaza seçili değilse tüm sepeti say
+            Object.values(cart).forEach(storeCart => {
+                total += storeCart.items.reduce((sum, item) => sum + item.quantity, 0);
+            });
+        }
         if (cartCount) {
             cartCount.textContent = total;
             cartCount.classList.toggle('show', total > 0);
