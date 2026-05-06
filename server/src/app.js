@@ -265,6 +265,21 @@ const STORE_SPECIAL_UPDATE_FIELDS = [
   'stoplistProductIds'
 ];
 
+function normalizePermission(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function hasPermission(user, ...targets) {
+  const wanted = new Set(targets.map(normalizePermission).filter(Boolean));
+  if (wanted.size === 0) return false;
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  return permissions.some((permission) => {
+    const normalized = normalizePermission(permission);
+    if (!normalized) return false;
+    return wanted.has(normalized);
+  });
+}
+
 function pickStoreSpecialUpdatePayload(body) {
   const source = body && typeof body === 'object' ? body : {};
   const picked = {};
@@ -286,17 +301,15 @@ function requireStoreWriteAccess(req, res, next) {
     return next();
   }
 
-  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
-  if (permissions.includes('stores')) {
+  if (hasPermission(user, 'stores', 'store')) {
     return next();
   }
 
   const isStoreUser = user.role === 'store_user';
-  const hasProductsPermission = permissions.includes('products');
   const userStoreId = String(user.storeId || '').trim();
   const targetStoreId = String(req.params?.id || '').trim();
 
-  if (!isStoreUser || !hasProductsPermission || !userStoreId || userStoreId !== targetStoreId) {
+  if (!isStoreUser || !userStoreId || userStoreId !== targetStoreId) {
     return next(new HttpError(403, 'Insufficient permissions'));
   }
 
@@ -306,6 +319,63 @@ function requireStoreWriteAccess(req, res, next) {
 
   req.body = pickStoreSpecialUpdatePayload(req.body);
   return next();
+}
+
+async function requireProductWriteAccess(req, res, next) {
+  try {
+    const user = req.user;
+    if (!user) {
+      return next(new HttpError(401, 'Authentication required'));
+    }
+
+    if (user.role === 'superadmin' || user.role === 'admin') {
+      return next();
+    }
+
+    if (hasPermission(user, 'products', 'product')) {
+      return next();
+    }
+
+    if (user.role !== 'store_user') {
+      return next(new HttpError(403, 'Insufficient permissions'));
+    }
+
+    const userStoreId = String(user.storeId || '').trim();
+    if (!userStoreId) {
+      return next(new HttpError(403, 'Insufficient permissions'));
+    }
+
+    if (req.method === 'POST') {
+      const requestStoreId = String(req.body?.storeId || req.body?.store_id || '').trim();
+      if (requestStoreId && requestStoreId !== userStoreId) {
+        return next(new HttpError(403, 'Insufficient permissions'));
+      }
+      req.body = { ...(req.body || {}), storeId: userStoreId };
+      return next();
+    }
+
+    const productId = String(req.params?.id || '').trim();
+    if (!productId) {
+      return next(new HttpError(400, 'Product id is required'));
+    }
+
+    const existing = await getResource('products', productId);
+    if (!existing) {
+      return next(new HttpError(404, 'Resource not found'));
+    }
+
+    if (String(existing.storeId || '').trim() !== userStoreId) {
+      return next(new HttpError(403, 'Insufficient permissions'));
+    }
+
+    if (req.method === 'PUT' || req.method === 'PATCH') {
+      req.body = { ...(req.body || {}), storeId: userStoreId };
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 }
 
 function createCrudRoutes(basePath, resource, options = {}) {
@@ -360,7 +430,7 @@ function createCrudRoutes(basePath, resource, options = {}) {
 }
 
 createCrudRoutes('/api/stores', 'stores', { writeGuards: [requireAuth, requireStoreWriteAccess] });
-createCrudRoutes('/api/products', 'products');
+createCrudRoutes('/api/products', 'products', { writeGuards: [requireAuth, requireProductWriteAccess] });
 createCrudRoutes('/api/orders', 'orders', { publicCreate: true });
 createCrudRoutes('/api/users', 'users');
 createCrudRoutes('/api/categories/parents', 'parentCategories');

@@ -1140,8 +1140,8 @@
                 if (token) {
                     storeRef.update({
                         views: firebase.firestore.FieldValue.increment(1)
-                    }).catch(e =>                }
-                storeViews += 1;
+                    }).catch(() => {});
+                }                storeViews += 1;
                 const storeIdx = allStores.findIndex(s => s.id === storeId);
                 if (storeIdx !== -1) allStores[storeIdx].views = storeViews;
             } catch (vErr) {
@@ -3537,7 +3537,8 @@
             renderCategoryMenu();
             checkSiteSettings();
             router();
-            fetchAndCacheData().catch(e =>        } else if (isDirectStoreAccess) {
+            fetchAndCacheData().catch(() => {});
+        } else if (isDirectStoreAccess) {
             if (cachedData) {
                 allStores = cachedData.stores || [];
                 clearStoplistCache();
@@ -3548,10 +3549,11 @@
                 window.isInitialLoadComplete = true;
                 router();
                 checkSiteSettings();
-                fetchAndCacheData().catch(e =>            } else {
+                fetchAndCacheData().catch(() => {});
+            } else {
                 fetchAndCacheData(true).then(() => {
                     router();
-                    fetchAndCacheData().catch(e =>                    checkSiteSettings();
+                    checkSiteSettings();
                 });
             }
         } else {
@@ -3599,7 +3601,8 @@
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js').then(reg => {
-            }).catch(err =>        });
+            }).catch(() => {});
+        });
     }
 });
 

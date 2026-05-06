@@ -1507,6 +1507,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 htmlStr += `
                     <tr>
                         <td data-label="ID" class="product-id-cell">${product.id}</td>
+                        <td data-label="Surat" class="product-img-cell">${product.imageUrl ? `<img src="${product.imageUrl}" alt="${product.title || ''}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #eee;">` : '<span style="color:#ccc;font-size:11px;">Ýok</span>'}</td>
                         <td data-label="Haryt Ady" class="product-title-cell">${product.title || ''}</td>
                         <td data-label="Magazyn" class="product-store-cell">${storeName}</td>
                         <td data-label="Bahasy" class="product-price-cell">${product.price || ''}</td>
@@ -2091,6 +2092,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 htmlStr += `
                     <tr>
                         <td data-label="ID" class="product-id-cell">${product.id}</td>
+                        <td data-label="Surat" class="product-img-cell">${product.imageUrl ? `<img src="${product.imageUrl}" alt="${product.title || ''}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #eee;">` : '<span style="color:#ccc;font-size:11px;">Ýok</span>'}</td>
                         <td data-label="Haryt Ady" class="product-title-cell">${product.title || ''}</td>
                         <td data-label="Magazyn" class="product-store-cell">${storeName}</td>
                         <td data-label="Bahasy" class="product-price-cell">${product.price || ''}</td>
