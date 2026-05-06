@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', async () => {
+﻿document.addEventListener('DOMContentLoaded', async () => {
 
     // --- DOM ELEMANLARI ---
     var storeList = document.getElementById('store-list');
@@ -78,21 +78,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // açmaya çalışmak popup engelleyicileri tetikler.
     function openSmsUrl(url, phoneNumber, orderText) {
         try {
-            console.log('📱 SMS açılıyor:', url);
-            console.log('📱 Telefon:', phoneNumber);
 
             // Tek yöntem: SMS uygulamasına yönlendir
             window.location.href = url;
 
         } catch (error) {
-            console.error('❌ SMS açılamadı:', error);
             showNotification(`✅ Sargyt kabul edildi! Telefon: ${phoneNumber}`, true);
         }
     }
 
     // API bridge kontrolü
     if (!window.db) {
-        console.error('❌ API istemcisi bulunamadı!');
         showNotification('Sistem yüklenemedi! Lütfen sayfayı yenileyin.', false);
         return;
     }
@@ -115,7 +111,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
         } catch (error) {
-            console.warn('API health check geçici olarak başarısız. URL değiştirilmeden devam ediliyor.', error);
         } finally {
             clearTimeout(timeoutId);
         }
@@ -155,11 +150,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 SafeStorage.removeItem(CACHE_KEY);
                 return null;
             }
-
-            console.log('✅ Önbellekten veri yüklendi (SafeStorage)');
             return data;
         } catch (e) {
-            console.warn('Önbellek okuma hatası, baypas ediliyor.', e);
             return null;
         }
     }
@@ -171,7 +163,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 timestamp: Date.now()
             }));
         } catch (e) {
-            console.warn('Önbellek yazma hatası, baypas ediliyor.', e);
         }
     }
 
@@ -196,11 +187,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         resolve(this._db);
                     };
                     request.onerror = (e) => {
-                        console.warn('IDB başlatılamadı:', e);
                         resolve(null);
                     };
                 } catch (err) {
-                    console.warn('IDB exception:', err);
                     resolve(null);
                 }
             });
@@ -271,7 +260,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ✅ Veri çekme ve önbellekleme (local API)
     async function fetchAndCacheData(onlyStores = false) {
-        console.log('🔄 Temel veriler local API üzerinden yükleniyor...');
 
         const fetchApiJson = async (path) => {
             const requestOptions = { method: 'GET', cache: 'no-cache' };
@@ -302,8 +290,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.allOldCategories = result.categories;
             window.isInitialLoadComplete = true; // ✅ Temel yükleme bitti
 
-            console.log(`✅ ${allStores.length} mağaza yüklendi (KAYNAK: ${result.source})`);
-
             if (allStores.length > 0) {
                 setCachedData({
                     stores: allStores,
@@ -317,7 +303,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return true;
 
         } catch (masterError) {
-            console.error('❌ KRİTİK HATA: Temel veriler local API üzerinden çekilemedi!', masterError);
             return false;
         }
     }
@@ -348,7 +333,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // ✅ PERFORMANS: Veri yüklenmemişse skeleton göster
         if (allStores.length === 0) {
-            console.log('⏳ Veriler henüz yüklenmedi, skeleton gösteriliyor...');
             showStoreSkeleton();
             return;
         }
@@ -409,7 +393,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // ✅ Element kontrolü
             if (!categoryMenu) {
-                console.error('❌ category-menu elementi bulunamadı!');
                 return;
             }
 
@@ -419,12 +402,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const parentCategories = window.allParentCategories || [];
             const subcategories = window.allSubcategories || [];
 
-            console.log('📂 Ana Kategoriler (Worker):', parentCategories);
-            console.log('📂 Alt Kategoriler (Worker):', subcategories);
-
             // Eğer hiç kategori yoksa, eski tek seviyeli sistemden veri çekmeye çalış
             if (parentCategories.length === 0) {
-                console.log('⚠️ Ana kategori bulunamadı, eski sistem deneniyor...');
 
                 const oldCategories = window.allOldCategories || [];
 
@@ -484,8 +463,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                     });
                 });
-
-                console.log('✅ Eski kategori sistemi ile menü oluşturuldu');
                 return;
             }
 
@@ -509,8 +486,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const subCategoryStores = allStores.filter(s => categoryStoreIds.includes(s.category));
                 const directParentStores = allStores.filter(s => s.category === parent.id);
                 const categoryStores = [...subCategoryStores, ...directParentStores];
-
-                console.log(`📁 ${parent.name}: ${parentSubcategories.length} alt kategori, ${subCategoryStores.length} alt kategori mağaza, ${directParentStores.length} doğrudan ana kategori mağaza, toplam: ${categoryStores.length} mağaza`);
 
                 if (categoryStores.length === 0) return; // Boş kategorileri gösterme
 
@@ -593,10 +568,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             });
 
-            console.log('✅ Kategori menüsü oluşturuldu');
-
         } catch (error) {
-            console.error('❌ Kategori menüsü oluşturulamadı:', error);
         }
     }
 
@@ -794,7 +766,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastRenderedStoreId = null;
 
     // ✅ YENİ: Mağaza bazlı tembel yükleme (Stale-While-Revalidate Pattern)
-    // IDB veya RAM'den anında yükle, arka planda Firebase'den güncel veriyi çek
+    // IDB veya RAM'den anında yükle, arka planda API'den güncel veriyi çek
     const _storeProductFetchPromises = {}; // Aynı mağaza için paralel istek engelle
 
     async function getStoreProducts(storeId) {
@@ -806,21 +778,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const idbProducts = await showlyIDB.getProductsStore(storeId);
                 if (idbProducts && idbProducts.length > 0) {
-                    console.log(`📦 IDB'den ${idbProducts.length} ürün önce gösterildi (${storeId})`);
                     // RAM'e ekle ki ikinci gidişte hızlı olsun
                     allProducts = [...allProducts.filter(p => p.storeId !== storeId), ...idbProducts];
                     cachedProducts = idbProducts;
                 }
             } catch (e) {
-                console.warn('IDB hatası es geçildi.', e);
             }
         }
 
-        // 3. ✅ HER ZAMAN arka planda Firebase'den güncel veriyi çek (yeni ürün eklenmiş olabilir)
+        // 3. ✅ HER ZAMAN arka planda API'den güncel veriyi çek (yeni ürün eklenmiş olabilir)
         // Aynı mağaza için zaten fetch yapılıyorsa tekrar başlatma
         if (!_storeProductFetchPromises[storeId]) {
             _storeProductFetchPromises[storeId] = (async () => {
-                console.log(`☁️ Firebase'den güncel ürünler çekiliyor (${storeId})...`);
                 try {
                     const snap = await window.db.collection('products').where('storeId', '==', storeId).get();
                     const freshProducts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -830,16 +799,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     allProducts = [...allProducts.filter(p => p.storeId !== storeId), ...freshProducts];
                     // IDB'yi güncelle (Eskileri sil, yenileri ekle)
                     showlyIDB.saveProductsForStore(storeId, freshProducts).catch(() => { });
-                    console.log(`✅ Firebase'den ${freshProducts.length} güncel ürün alındı (${storeId})`);
 
                     // Eğer daha önce gösterilen ile çekilen MİKTAR farklıysa UI'ı sessizce yenile
                     if (freshProducts.length !== cachedProducts.length) {
-                        console.log(`🔄 Miktar değişti (IDB/RAM: ${cachedProducts.length}, Firebase: ${freshProducts.length}). UI güncelleniyor...`);
                         renderStorePage(storeId, window._currentActiveFilter || null, true);
                     }
                 } catch (err) {
                     // Firebase başarısız oldu; eski cache yeterli
-                    console.warn('Arka plan Firebase güncellemesi başarısız:', err);
                 } finally {
                     // 30 saniye sonra aynı mağaza için tekrar fetch yapılabilsin
                     setTimeout(() => { delete _storeProductFetchPromises[storeId]; }, 30000);
@@ -847,7 +813,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             })();
         }
 
-        // 4. Cache BOŞSA (ilk ziyaret) Firebase'den bekleyerek yükle
+        // 4. Cache BOŞSA (ilk ziyaret) API'den bekleyerek yükle
         if (cachedProducts.length === 0) {
             await _storeProductFetchPromises[storeId];
             return allProducts.filter(p => p.storeId === storeId);
@@ -922,7 +888,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 featuredProductsCache[storeId] = { status: 'ready', products: featuredProducts, timestamp: Date.now() };
                 return featuredProducts;
             } catch (error) {
-                console.warn('Öne çıkan ürünler alınamadı:', error);
                 featuredProductsCache[storeId] = { status: 'error', products: [], timestamp: Date.now() };
                 return [];
             }
@@ -1038,7 +1003,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 readyMealProductsCache[storeId] = { status: 'ready', products: [], timestamp: Date.now() };
                 return [];
             } catch (error) {
-                console.warn('Taýyn naharlar alınamadı:', error);
                 readyMealProductsCache[storeId] = { status: 'error', products: [], timestamp: Date.now() };
                 return [];
             }
@@ -1158,7 +1122,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cardsNeeded = productsGrid && productsGrid.querySelector('.product-card:not(.skeleton-card)') === null;
 
         if (!hasProducts && isNewStore) {
-            console.log('⏳ Ürünler Firebase veya IDB\'den bekleniyor...');
             showStoreSkeleton();
         }
 
@@ -1177,13 +1140,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (token) {
                     storeRef.update({
                         views: firebase.firestore.FieldValue.increment(1)
-                    }).catch(e => console.warn('Sayaç DB hatası:', e));
-                }
+                    }).catch(e =>                }
                 storeViews += 1;
                 const storeIdx = allStores.findIndex(s => s.id === storeId);
                 if (storeIdx !== -1) allStores[storeIdx].views = storeViews;
             } catch (vErr) {
-                console.warn('Sayaç hazırlık hatası:', vErr);
             }
         }
 
@@ -1485,7 +1446,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             setupCategoryScrollSpy();
 
             lastRenderedStoreId = storeId;
-            console.log(`✅ ${storeProducts.length} ürün kartı oluşturuldu (yeni mağaza)`);
 
             // ✅ Observer ile geri kalan resimleri yükle (800px önceden)
             if (productImageObserver) {
@@ -1587,8 +1547,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             productsGrid.appendChild(noResults);
         }
 
-        console.log(`✅ Filtre uygulandı: ${visibleCount}/${storeProducts.length} ürün gösteriliyor`);
-
         // Opacity efektini temizle (Saniyelik flash etkisi yeterlidir)
         setTimeout(() => {
             productsGrid.classList.remove('products-filtering');
@@ -1639,8 +1597,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         categoryHeaders.forEach(header => {
             _scrollSpyObserver.observe(header);
         });
-
-        console.log(`✅ Scroll-Spy aktif: ${categoryHeaders.length} kategori izleniyor`);
     }
 
     function highlightCategoryButton(categoryName) {
@@ -1668,11 +1624,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (doc.exists) {
                 const data = doc.data();
                 if (data.hideCategories) {
-                    console.log('🙈 Ayar aktif: Kategoriler ve Menü gizli kalıyor...');
                     window.isCategoriesHidden = true;
                     document.body.classList.remove('categories-visible');
                 } else {
-                    console.log('👁️ Kategoriler görünür yapılıyor.');
                     window.isCategoriesHidden = false;
                     document.body.classList.add('categories-visible');
                 }
@@ -1680,7 +1634,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 window.isCategoriesHidden = false; // ✅ Ayar yoksa varsayılan: görünür
             }
         } catch (error) {
-            console.error('Ayarlar okunamadı:', error);
             window.isCategoriesHidden = false; // ✅ Hata durumunda varsayılan: görünür
         }
     }
@@ -1877,7 +1830,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const addToCart = (product) => {
-        console.log('🛒 Sepete ekle çalışıyor:', product);
 
         if (isProductStoplisted(product)) {
             showNotification('Bu haryt gutardy.', false);
@@ -1886,7 +1838,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const store = allStores.find(s => s.id === product.storeId);
         if (!store) {
-            console.error('❌ Mağaza bulunamadı:', product.storeId);
             return;
         }
 
@@ -1906,7 +1857,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         saveCart(); // ✅ Kalıcı hale getir
-        console.log('✅ Sepete eklendi:', product.title);
     };
 
     // --- OLAY DİNLEYİCİLER ---
@@ -2575,7 +2525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cleanNumber = orderPhone.replace(/[^0-9]/g, '');
 
             try {
-                // Firebase'e siparişi kaydet
+                // API'ye siparişi kaydet
                 const order = {
                     customer: { name, phone, address, note },
                     storeId: currentStoreCart.storeId,
@@ -2588,7 +2538,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
 
                 await window.db.collection('orders').add(order);
-                console.log('Sipariş Firebase\'e eklendi');
 
 
                 if (orderLoadingOverlay) orderLoadingOverlay.style.display = 'none';
@@ -2604,13 +2553,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // SMS URL oluştur
                     const smsUrl = `sms:${cleanNumber}?body=${encodeURIComponent(orderText)}`;
 
-                    console.log('📱 SMS açılıyor:', smsUrl);
-                    console.log('📱 SMS içeriği:', orderText);
-
                     // Direkt SMS aç (tüm yöntemleri dene)
                     openSmsUrl(smsUrl, cleanNumber, orderText);
                 } else {
-                    console.log('ℹ️ Mağaza sipariş telefonu tanımlı değil, SMS adımı atlanıyor.');
                 }
 
                 // Sipariş modal'ını kapat
@@ -2623,7 +2568,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cartButton.click();
 
             } catch (error) {
-                console.error('Sargyt goşulmady:', error);
                 if (orderLoadingOverlay) orderLoadingOverlay.style.display = 'none';
 
                 submitBtn.disabled = false;
@@ -3007,7 +2951,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             renderBanquetPackages();
         } catch (error) {
-            console.error('❌ Paketler ýüklenip bilmedi:', error);
             packagesList.innerHTML = `<p class="error-packages">${translate('banquet_load_error', getSelectedLang())}</p>`;
         }
     }
@@ -3294,7 +3237,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // document.body.style.overflow = 'auto'; // popstate halleder
             banquetForm.reset();
         } catch (error) {
-            console.error('❌ Rezervasyon hatası:', error);
             showNotification(translate('banquet_error', getSelectedLang()), false);
         } finally {
             submitBtn.disabled = false;
@@ -3319,14 +3261,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (idx !== -1) allStores[idx] = store;
             }
         } catch (e) {
-            console.error('Mağaza verisi çekilemedi:', e);
             store = allStores.find(s => s.id === storeId);
         }
 
         if (!store) return;
 
         currentStoreId = storeId; // ✅ GÜNCELLENDİ: Global Store ID'yi set et
-        console.log('📱 Bron modalı açıldı. Store ID:', currentStoreId, 'Mağaza Adı:', store.name);
 
         const bronSchemaImg = document.getElementById('bron-schema-img');
         const bronNoSchema = document.getElementById('bron-no-schema');
@@ -3395,7 +3335,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${translate('banquet_submitting', getSelectedLang())}`;
 
             // --- ÇAKIŞMA KONTROLÜ (CONFLICT CHECK) ---
-            console.log('🔍 Çakışma kontrolü yapılıyor... Store:', currentStoreId, 'Tablo:', tableNumber);
             const snapshot = await window.db.collection('orders')
                 .where('storeId', '==', String(currentStoreId).trim())
                 .where('orderType', '==', 'bron')
@@ -3447,15 +3386,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 date: new Date().toISOString(),
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
-
-            console.log('📤 Bron verisi kaydediliyor (StoreId: ' + currentStoreId + '):', bronData);
             const docRef = await window.db.collection('orders').add(bronData);
-            console.log('✅ Bron başarıyla kaydedildi! Kayıt ID:', docRef.id);
             showNotification(translate('banquet_success', getSelectedLang()), true);
             history.back();
             bronForm.reset();
         } catch (error) {
-            console.error('❌ Bron hatası:', error);
             showNotification(translate('banquet_error', getSelectedLang()), false);
         } finally {
             submitBtn.disabled = false;
@@ -3598,13 +3533,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.allSubcategories = cachedData.subcategories || [];
             window.allOldCategories = cachedData.categories || [];
             window.isInitialLoadComplete = true; // ✅ Cache'den geldiyse yükleme tamdır
-            console.log(`🚀 Önbellek yüklendi: ${allStores.length} mağaza bulunduruyor.`);
 
             renderCategoryMenu();
             checkSiteSettings();
             router();
-            fetchAndCacheData().catch(e => console.warn('Arkaplan güncelleme hatası yutuldu:', e));
-        } else if (isDirectStoreAccess) {
+            fetchAndCacheData().catch(e =>        } else if (isDirectStoreAccess) {
             if (cachedData) {
                 allStores = cachedData.stores || [];
                 clearStoplistCache();
@@ -3615,12 +3548,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 window.isInitialLoadComplete = true;
                 router();
                 checkSiteSettings();
-                fetchAndCacheData().catch(e => console.warn('Yenileme hatası:', e));
-            } else {
+                fetchAndCacheData().catch(e =>            } else {
                 fetchAndCacheData(true).then(() => {
                     router();
-                    fetchAndCacheData().catch(e => console.warn('Arkaplan fetch hatası:', e));
-                    checkSiteSettings();
+                    fetchAndCacheData().catch(e =>                    checkSiteSettings();
                 });
             }
         } else {
@@ -3661,7 +3592,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof window.onLanguageChange === 'function') {
         window.onLanguageChange(handleLanguageChange);
     } else {
-        console.error('❌ language.js yüklenemedi veya Cloudflare tarafından engellendi.');
         showNotification('Dil dosyası yüklenemedi. Sayfayı yenileyin.', false);
     }
 
@@ -3669,9 +3599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js').then(reg => {
-                console.log('✅ ServiceWorker başarıyla kayıt edildi, Offline Sistem Aktif.');
-            }).catch(err => console.warn('⚠️ ServiceWorker kaydı başarısız.', err));
-        });
+            }).catch(err =>        });
     }
 });
 
