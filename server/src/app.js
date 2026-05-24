@@ -432,6 +432,11 @@ function createCrudRoutes(basePath, resource, options = {}) {
 createCrudRoutes('/api/stores', 'stores', { writeGuards: [requireAuth, requireStoreWriteAccess] });
 createCrudRoutes('/api/products', 'products', { writeGuards: [requireAuth, requireProductWriteAccess] });
 createCrudRoutes('/api/orders', 'orders', { publicCreate: true });
+
+app.post('/api/stores/:id/view', asyncHandler(async (req, res) => {
+  await upsertResource('stores', { views: { __increment: 1 } }, req.params.id);
+  res.json({ success: true });
+}));
 createCrudRoutes('/api/users', 'users');
 createCrudRoutes('/api/categories/parents', 'parentCategories');
 createCrudRoutes('/api/categories/subcategories', 'subcategories');

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(nslookup -type=NS showlytm.store 8.8.8.8)",
+      "Bash(curl -s \"https://dns.google/resolve?name=showlytm.store&type=NS\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(a['data']\\) for a in d.get\\('Answer',[]\\)]\")",
+      "Bash(curl *)"
+    ]
+  }
+}

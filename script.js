@@ -1129,19 +1129,8 @@
         if (isNewStore) {
             let storeViews = store.views || 0;
             try {
-                const storeRef = window.db.collection('stores').doc(storeId);
-                let token = '';
-                try {
-                    token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
-                } catch (tokenErr) {
-                    token = '';
-                }
-
-                if (token) {
-                    storeRef.update({
-                        views: firebase.firestore.FieldValue.increment(1)
-                    }).catch(() => {});
-                }                storeViews += 1;
+                fetch(`/api/stores/${storeId}/view`, { method: 'POST' }).catch(() => {});
+                storeViews += 1;
                 const storeIdx = allStores.findIndex(s => s.id === storeId);
                 if (storeIdx !== -1) allStores[storeIdx].views = storeViews;
             } catch (vErr) {
