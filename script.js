@@ -1125,15 +1125,19 @@
             showStoreSkeleton();
         }
 
-        // ✅ Ziyaret sayısını SADECE mağaza ilk açıldığında artır
+        // Ziyaret sayısını SADECE bu seansta ilk kez açıldığında artır
         if (isNewStore) {
-            let storeViews = store.views || 0;
-            try {
-                fetch(`/api/stores/${storeId}/view`, { method: 'POST' }).catch(() => {});
-                storeViews += 1;
-                const storeIdx = allStores.findIndex(s => s.id === storeId);
-                if (storeIdx !== -1) allStores[storeIdx].views = storeViews;
-            } catch (vErr) {
+            const sessionKey = `viewed_${storeId}`;
+            if (!sessionStorage.getItem(sessionKey)) {
+                let storeViews = store.views || 0;
+                try {
+                    fetch(`/api/stores/${storeId}/view`, { method: 'POST' }).catch(() => {});
+                    storeViews += 1;
+                    const storeIdx = allStores.findIndex(s => s.id === storeId);
+                    if (storeIdx !== -1) allStores[storeIdx].views = storeViews;
+                } catch (vErr) {
+                }
+                sessionStorage.setItem(sessionKey, '1');
             }
         }
 
