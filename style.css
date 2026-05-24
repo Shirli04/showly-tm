@@ -156,18 +156,18 @@ header {
 }
 
 .search-icon-svg {
-    position: absolute;
-    left: 14px;
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
+    margin-left: 14px;
     color: #9CA3AF;
     pointer-events: none;
-    flex-shrink: 0;
+    display: block;
 }
 
 .search-bar input {
     flex: 1;
-    padding: 12px 44px 12px 42px;
+    padding: 12px 44px 12px 10px;
     border: none;
     border-radius: 12px;
     background: transparent;

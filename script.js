@@ -2057,7 +2057,7 @@
 
         // Sepette ürünü ara
         for (const sId in cart) {
-            const idx = cart[sId].items.findIndex(i => i.id === productId);
+            const idx = cart[sId].items.findIndex(i => String(i.id) === String(productId));
             if (idx !== -1) {
                 targetStoreId = sId;
                 itemIndex = idx;
@@ -2327,7 +2327,7 @@
             const storeId = removeBtn.getAttribute('data-store-id');
             const productId = removeBtn.getAttribute('data-id');
             if (cart[storeId]) {
-                cart[storeId].items = cart[storeId].items.filter(i => i.id !== productId);
+                cart[storeId].items = cart[storeId].items.filter(i => String(i.id) !== String(productId));
                 if (cart[storeId].items.length === 0) {
                     delete cart[storeId];
                 }
