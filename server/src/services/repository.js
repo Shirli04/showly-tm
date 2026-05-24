@@ -144,6 +144,7 @@ function normalizeUser(row) {
     role: row.role,
     permissions: ensureArray(row.permissions),
     storeId: row.store_id || null,
+    plainPassword: row.plain_password || null,
     fcmToken: row.fcm_token || null,
     fcmTokens: Array.isArray(row.fcm_tokens) ? row.fcm_tokens.filter(Boolean) : [],
     createdAt: row.created_at,
@@ -730,8 +731,14 @@ async function upsertUser(payload, id) {
   }
 
   let passwordHash = data.passwordHash || data.password_hash || null;
+  let plainPassword = null;
   if (data.password) {
-    passwordHash = data.password.startsWith('$2') ? data.password : await bcrypt.hash(data.password, 10);
+    if (data.password.startsWith('$2')) {
+      passwordHash = data.password;
+    } else {
+      plainPassword = data.password;
+      passwordHash = await bcrypt.hash(data.password, 10);
+    }
   }
 
   if (!passwordHash) {
@@ -751,11 +758,12 @@ async function upsertUser(payload, id) {
   }
 
   const result = await query(`
-    INSERT INTO users (id, username, password_hash, role, permissions, store_id, fcm_token, fcm_tokens)
-    VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5::jsonb, $6, $7, $8::text[])
+    INSERT INTO users (id, username, password_hash, plain_password, role, permissions, store_id, fcm_token, fcm_tokens)
+    VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb, $7, $8, $9::text[])
     ON CONFLICT (id) DO UPDATE SET
       username = EXCLUDED.username,
       password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
+      plain_password = COALESCE(EXCLUDED.plain_password, users.plain_password),
       role = EXCLUDED.role,
       permissions = EXCLUDED.permissions,
       store_id = EXCLUDED.store_id,
@@ -770,6 +778,7 @@ async function upsertUser(payload, id) {
     id || data.id || null,
     source.username,
     passwordHash,
+    plainPassword,
     normalizedRole,
     JSON.stringify(ensureArray(source.permissions)),
     normalizedStoreId,

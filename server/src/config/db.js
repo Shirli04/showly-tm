@@ -59,6 +59,10 @@ async function runMigrations() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_users_store_id ON users(store_id);
   `);
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS plain_password TEXT;
+  `);
 }
 
 async function query(text, params) {
