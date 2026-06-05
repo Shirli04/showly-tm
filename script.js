@@ -631,13 +631,8 @@
                 products: readyMealProducts
             });
         }
-        if (hasFeaturedCategory) {
-            categoryObjects.push({
-                key: FEATURED_CATEGORY_KEY,
-                title: FEATURED_CATEGORY_TITLE,
-                products: featuredProducts
-            });
-        }
+        // ✅ v2: Meşhur (Featured) önümler popular rail-de görkezilýär — kategori chip-de duplicate etme
+        // (hasFeaturedCategory bolsa-da chip goşulmaýar)
 
         // Kategori butonları
         // ✅ YENİ: Kategorileri ekranda gösterilecek ismine göre (displayCat) alfabetik sırala
@@ -1411,19 +1406,8 @@
                 });
             }
 
-            if (featuredProducts.length > 0) {
-                const featuredHeader = document.createElement('div');
-                featuredHeader.className = 'category-section-header';
-                featuredHeader.setAttribute('data-category-section', FEATURED_CATEGORY_KEY);
-                featuredHeader.innerHTML = `<h3>${FEATURED_CATEGORY_TITLE}</h3>`;
-                productsFragment.appendChild(featuredHeader);
-
-                featuredProducts.forEach((product, index) => {
-                    const featuredCard = createProductCard(product, readyMealProducts.length + index, 'featured');
-                    productsFragment.appendChild(featuredCard);
-                    updateFavoriteButton(product.id);
-                });
-            }
+            // ✅ v2: Meşhurlar artık popular rail-de gözükýär — gridde duplicate "Meşhurlar" bölümi yok.
+            // (featuredProducts.forEach blok-y çykarylan)
 
             sortedProducts.forEach((product, index) => {
 
@@ -1959,7 +1943,9 @@
         const container = document.getElementById('popular-rail-container');
         if (!section || !container) return;
 
-        const list = Array.isArray(featuredProductsList) ? featuredProductsList : [];
+        const rawList = Array.isArray(featuredProductsList) ? featuredProductsList : [];
+        // ✅ Stoplistdäki önümleri popular rail-den çykar (boş bolsa görkezme)
+        const list = rawList.filter(p => !isProductStoplisted(p));
         if (list.length === 0) {
             section.style.display = 'none';
             container.innerHTML = '';
