@@ -214,6 +214,15 @@
                 <h2></h2>
                 <p></p>
             </div>
+            <!-- POPULAR / HIT RAIL — yatay top önümler -->
+            <div class="popular-rail-section" id="popular-rail-section" style="display: none;">
+                <div class="popular-rail-header">
+                    <h3 data-i18n="popular_title">Köp sargyt edilýän</h3>
+                    <span class="popular-rail-eyebrow" data-i18n="popular_eyebrow">Popular</span>
+                </div>
+                <div class="popular-rail" id="popular-rail-container"></div>
+            </div>
+
             <!-- KATEGORİ FİLTRELEME ALANI - Yatay Sticky Bar -->
             <div class="category-filters-section" id="category-filters-section" style="display: none;">
                 <div id="category-buttons-container" class="category-buttons-container">
@@ -259,15 +268,17 @@
             </button>
         </div>
     </div>
-    <!-- Ürün Detay Modalı -->
-    <div id="product-modal" class="modal">
+    <!-- Ürün Detay Modalı (v2 — frame + blur backdrop + stepper + upsell) -->
+    <div id="product-modal" class="modal pm-v2">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
-            <div class="product-detail-image">
+            <div class="product-detail-image pm-frame">
+                <img class="pm-bg" id="modal-image-bg" alt="" aria-hidden="true">
                 <div class="img-skeleton" id="modal-img-skeleton" style="display: none;"></div>
                 <span class="discount-badge" id="modal-discount-badge" style="display: none;"
                     data-i18n="discount">Arzanladyş</span>
-                <img id="modal-image" src="" alt="">
+                <img class="pm-fg" id="modal-image" src="" alt="">
+                <div class="pm-scrim" aria-hidden="true"></div>
             </div>
             <div class="product-detail-info">
                 <h2 id="modal-title"></h2>
@@ -276,8 +287,17 @@
                 <p id="modal-material-row" style="display: block;"><span style="font-weight: bold; color: #333;"
                         data-i18n="material_label">Material:</span> <span id="modal-material"></span></p>
                 <div class="product-variants" id="modal-variants"></div>
-                <div class="product-detail-actions">
+                <div class="product-detail-actions pm-qrow">
+                    <div class="pm-stepper" id="modal-qty-stepper">
+                        <button type="button" class="pm-stepper-btn" id="modal-qty-minus" aria-label="−">−</button>
+                        <span class="pm-stepper-val" id="modal-qty-val">1</span>
+                        <button type="button" class="pm-stepper-btn" id="modal-qty-plus" aria-label="+">+</button>
+                    </div>
                     <button class="btn-add-cart" id="modal-add-cart" data-i18n="add_to_cart">Sebede goş</button>
+                </div>
+                <div class="pm-upsell" id="modal-upsell" style="display: none;">
+                    <div class="pm-upsell-title" data-i18n="upsell_title">Ýanyna gowy görünýär</div>
+                    <div class="pm-upsell-cards" id="modal-upsell-cards"></div>
                 </div>
             </div>
         </div>

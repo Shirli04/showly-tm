@@ -322,6 +322,8 @@
             if (reservationBtn) reservationBtn.style.display = 'none';
             if (productsGrid) productsGrid.style.display = 'none';
             if (notFoundSection) notFoundSection.style.display = 'none';
+            const popularRailHome = document.getElementById('popular-rail-section');
+            if (popularRailHome) popularRailHome.style.display = 'none';
             document.title = 'Showly - Online Katalog Platformasy';
             return;
         }
@@ -350,6 +352,8 @@
             if (mainFiltersSection) mainFiltersSection.style.display = 'none';
             if (reservationBtn) reservationBtn.style.display = 'none'; // ✅ GÜNCELLENDİ
             if (productsGrid) productsGrid.style.display = 'none';
+            const popularRail404 = document.getElementById('popular-rail-section');
+            if (popularRail404) popularRail404.style.display = 'none';
             if (notFoundSection) notFoundSection.style.display = 'block';
             document.title = 'Sahypa tapylmady - Showly';
         }
@@ -1143,6 +1147,9 @@
 
         currentStoreId = storeId;
 
+        // ✅ Popular/HIT rail — featuredProducts varsa göster, yoksa gizle
+        try { renderPopularRail(storeId, featuredProducts); } catch (e) { /* silent */ }
+
         // ✅ PERFORMANS: Sadece yeni mağazada veya kartlar yokken (arka plan yüklemesi bittiyse) kartları/banner'ı oluştur
         if (isNewStore || (hasProducts && cardsNeeded) || forceRebuild) {
             // Ürün grid'ini temizle ve göster
@@ -1828,7 +1835,7 @@
         updateCartCount();
     }
 
-    const addToCart = (product) => {
+    const addToCart = (product, qty = 1) => {
 
         if (isProductStoplisted(product)) {
             showNotification('Bu haryt gutardy.', false);
@@ -1840,6 +1847,8 @@
             return;
         }
 
+        const addQty = Math.max(1, parseInt(qty, 10) || 1);
+
         if (!cart[product.storeId]) {
             cart[product.storeId] = {
                 storeId: product.storeId,
@@ -1850,13 +1859,124 @@
 
         const existing = cart[product.storeId].items.find(item => item.id === product.id);
         if (existing) {
-            existing.quantity += 1;
+            existing.quantity += addQty;
         } else {
-            cart[product.storeId].items.push({ ...product, quantity: 1 });
+            cart[product.storeId].items.push({ ...product, quantity: addQty });
         }
 
         saveCart(); // ✅ Kalıcı hale getir
     };
+
+    // ============================================================
+    // PRODUCT MODAL v2 — fitImage, quantity stepper, upsell rail
+    // ============================================================
+    const PM_FRAME_RATIO = 4 / 3;
+    const PM_FIT_TOLERANCE = 0.30;
+
+    function fitModalImage(img) {
+        if (!img || !img.naturalWidth || !img.naturalHeight) return;
+        const r = img.naturalWidth / img.naturalHeight;
+        const close = Math.abs(r - PM_FRAME_RATIO) / PM_FRAME_RATIO <= PM_FIT_TOLERANCE;
+        img.style.objectFit = close ? 'cover' : 'contain';
+    }
+
+    function getModalQty() {
+        const valEl = document.getElementById('modal-qty-val');
+        if (!valEl) return 1;
+        const n = parseInt(valEl.textContent, 10);
+        return isNaN(n) || n < 1 ? 1 : n;
+    }
+
+    function setModalQty(n) {
+        const valEl = document.getElementById('modal-qty-val');
+        if (!valEl) return;
+        const safe = Math.max(1, Math.min(99, parseInt(n, 10) || 1));
+        valEl.textContent = String(safe);
+    }
+
+    function renderUpsellRail(currentProduct) {
+        const wrap = document.getElementById('modal-upsell');
+        const cardsEl = document.getElementById('modal-upsell-cards');
+        if (!wrap || !cardsEl || !currentProduct) return;
+
+        const storeId = currentProduct.storeId;
+        const cached = featuredProductsCache[storeId];
+        let pool = (cached && Array.isArray(cached.products)) ? cached.products.slice() : [];
+
+        // Fallback: same store products excluding current
+        if (pool.length < 3) {
+            const extras = allProducts.filter(p =>
+                p.storeId === storeId &&
+                String(p.id) !== String(currentProduct.id) &&
+                !pool.some(x => String(x.id) === String(p.id))
+            );
+            pool = pool.concat(extras);
+        }
+
+        const picks = pool
+            .filter(p => String(p.id) !== String(currentProduct.id) && !isProductStoplisted(p))
+            .slice(0, 6);
+
+        if (picks.length === 0) {
+            wrap.style.display = 'none';
+            cardsEl.innerHTML = '';
+            return;
+        }
+
+        const lang = getSelectedLang();
+        const html = picks.map(p => {
+            const name = getProductField(p, 'name', lang) || '';
+            const price = p.price || '';
+            const imgUrl = getOptimizedImageUrl(p.imageUrl, 200);
+            return `
+                <div class="pm-upsell-card" data-product-id="${p.id}">
+                    <div class="pm-upsell-img" style="background-image:url('${imgUrl}')"></div>
+                    <button type="button" class="pm-upsell-plus" data-product-id="${p.id}" aria-label="+">+</button>
+                    <div class="pm-upsell-body">
+                        <div class="pm-upsell-name">${name}</div>
+                        <div class="pm-upsell-price">${price}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        cardsEl.innerHTML = html;
+        wrap.style.display = 'block';
+    }
+
+    function renderPopularRail(storeId, featuredProductsList) {
+        const section = document.getElementById('popular-rail-section');
+        const container = document.getElementById('popular-rail-container');
+        if (!section || !container) return;
+
+        const list = Array.isArray(featuredProductsList) ? featuredProductsList : [];
+        if (list.length === 0) {
+            section.style.display = 'none';
+            container.innerHTML = '';
+            return;
+        }
+
+        const lang = getSelectedLang();
+        const html = list.slice(0, 10).map(p => {
+            const name = getProductField(p, 'name', lang) || '';
+            const price = p.price || '';
+            const imgUrl = getOptimizedImageUrl(p.imageUrl, 280);
+            return `
+                <div class="popular-card" data-product-id="${p.id}">
+                    <div class="popular-card-badge">HIT</div>
+                    <div class="popular-card-img-wrap">
+                        <img class="popular-card-img" src="${imgUrl}" alt="${name}" loading="lazy">
+                    </div>
+                    <button type="button" class="popular-card-plus" data-product-id="${p.id}" aria-label="+">+</button>
+                    <div class="popular-card-body">
+                        <div class="popular-card-name">${name}</div>
+                        <div class="popular-card-price">${price}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        container.innerHTML = html;
+        section.style.display = 'block';
+    }
 
     // --- OLAY DİNLEYİCİLER ---
 
@@ -2188,7 +2308,7 @@
                     showNotification('Bu haryt gutardy.', false);
                     return;
                 }
-                addToCart(product);
+                addToCart(product, getModalQty());
                 history.back();
             }
         }
@@ -2204,12 +2324,86 @@
                 showNotification('Bu haryt gutardy.', false);
                 return;
             }
-            addToCart(product);
+            addToCart(product, getModalQty());
             // Modal'ı kapat (History back ile)
             history.back();
             // document.body.classList.remove('modal-open'); // popstate halleder
         }
     });
+
+    // ✅ Quantity stepper buttons
+    const qtyMinusBtn = document.getElementById('modal-qty-minus');
+    const qtyPlusBtn = document.getElementById('modal-qty-plus');
+    if (qtyMinusBtn) {
+        qtyMinusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setModalQty(getModalQty() - 1);
+        });
+    }
+    if (qtyPlusBtn) {
+        qtyPlusBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setModalQty(getModalQty() + 1);
+        });
+    }
+
+    // ✅ Upsell rail tıklamaları: kart → ürünü aç, + butonu → sepete ekle
+    const modalUpsellCards = document.getElementById('modal-upsell-cards');
+    if (modalUpsellCards) {
+        modalUpsellCards.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const plusBtn = e.target.closest('.pm-upsell-plus');
+            if (plusBtn) {
+                const pid = plusBtn.getAttribute('data-product-id');
+                const p = findProductById(pid);
+                if (p) {
+                    if (isProductStoplisted(p)) {
+                        showNotification('Bu haryt gutardy.', false);
+                        return;
+                    }
+                    addToCart(p, 1);
+                    showNotification(translate('added_to_cart', getSelectedLang()) || 'Sebede goşuldy.', true);
+                }
+                return;
+            }
+            const card = e.target.closest('.pm-upsell-card');
+            if (card) {
+                const pid = card.getAttribute('data-product-id');
+                if (pid) {
+                    // Mevcut modalı kapat ve yeni ürünü aç
+                    history.back();
+                    setTimeout(() => openProductModal(pid), 50);
+                }
+            }
+        });
+    }
+
+    // ✅ Popular rail tıklamaları
+    const popularRailContainer = document.getElementById('popular-rail-container');
+    if (popularRailContainer) {
+        popularRailContainer.addEventListener('click', (e) => {
+            const plusBtn = e.target.closest('.popular-card-plus');
+            if (plusBtn) {
+                e.stopPropagation();
+                const pid = plusBtn.getAttribute('data-product-id');
+                const p = findProductById(pid);
+                if (p) {
+                    if (isProductStoplisted(p)) {
+                        showNotification('Bu haryt gutardy.', false);
+                        return;
+                    }
+                    addToCart(p, 1);
+                    showNotification(translate('added_to_cart', getSelectedLang()) || 'Sebede goşuldy.', true);
+                }
+                return;
+            }
+            const card = e.target.closest('.popular-card');
+            if (card) {
+                const pid = card.getAttribute('data-product-id');
+                if (pid) openProductModal(pid);
+            }
+        });
+    }
 
     // ✅ BACK BUTTON SUPPORT: Modalı kapatmak için history.back() kullan
     // Bu, popstate eventini tetikler ve modal oradan kapanır.
@@ -2773,6 +2967,7 @@
         document.body.classList.add('modal-open');
 
         const modalImage = document.getElementById('modal-image');
+        const modalImageBg = document.getElementById('modal-image-bg');
         const modalSkeleton = document.getElementById('modal-img-skeleton');
 
         // ✅ GÜNCELLENDİ: Tıklanan ürünün ekrandaki mevcut resim kaynağını bul (Yeniden yüklemeyi önle)
@@ -2788,7 +2983,14 @@
             // Anında eldeki en iyi kalite resmi bas, skeleton göstermeye gerek kalmasın
             modalImage.src = preloadedImageUrl;
             modalImage.classList.add('loaded');
+            // Önce 'cover'a sıfırla; load oldukça fitModalImage doğrusunu seçer
+            modalImage.style.objectFit = 'cover';
+            if (modalImageBg) modalImageBg.src = preloadedImageUrl;
             if (modalSkeleton) modalSkeleton.style.display = 'none';
+
+            // Load eventinde frame'e uygun fit-mode seç
+            modalImage.onload = () => fitModalImage(modalImage);
+            if (modalImage.complete && modalImage.naturalWidth) fitModalImage(modalImage);
 
             // Arka planda yüksek kaliteli (varsa) versiyonu yükle
             const highResUrl = getOptimizedImageUrl(product.imageUrl, 800);
@@ -2796,6 +2998,7 @@
                 const tempImg = new Image();
                 tempImg.onload = () => {
                     modalImage.src = highResUrl;
+                    if (modalImageBg) modalImageBg.src = highResUrl;
                 };
                 tempImg.src = highResUrl;
             }
@@ -2805,6 +3008,12 @@
                 modalImage.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDQwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI0MDAiIGZpbGw9IiNmMGYwZjAiLz48cGF0aCBkPSJNMTYwIDE2MGg4MHY4MGgtODB6IiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iMjAwIiB5PSIyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5OTkiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj5TdXJhdCB5b2s8L2RleHQ+PC9zdmc+';
             };
         }
+
+        // ✅ Quantity stepper'ı sıfırla
+        setModalQty(1);
+
+        // ✅ Upsell rail'i doldur
+        try { renderUpsellRail(product); } catch (e) { /* silent */ }
 
         // ✅ GÜNCELLENDİ: Çok dilli modal başlık
         document.getElementById('modal-title').textContent = getProductField(product, 'name', getSelectedLang());

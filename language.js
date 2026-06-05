@@ -80,6 +80,21 @@
             ru: 'Скидка',
             en: 'Sale'
         },
+        popular_title: {
+            tm: 'Köp sargyt edilýän',
+            ru: 'Часто заказывают',
+            en: 'Most ordered'
+        },
+        popular_eyebrow: {
+            tm: 'Meşhur',
+            ru: 'Популярное',
+            en: 'Popular'
+        },
+        upsell_title: {
+            tm: 'Ýanyna gowy görünýär',
+            ru: 'Хорошо подходит',
+            en: 'Goes well with'
+        },
 
         // Cart Modal
         cart_title: {
