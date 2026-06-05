@@ -4951,3 +4951,42 @@ select {
         font-size: 17px;
     }
 }
+
+/* =================================================================
+   FILTR / KATEGORI BAR — vertikal merkezleşdirmek (senkron padding)
+   ================================================================= */
+.category-filters-section {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 12px !important;
+    min-height: 50px;
+}
+
+.category-buttons-container {
+    align-items: center;
+    width: 100%;
+    padding: 0;
+}
+
+.main-filters-section {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 16px !important;
+    margin: 0 10px 8px !important;
+    min-height: 56px;
+}
+
+.main-filters-section .filter-buttons-row {
+    width: 100%;
+    margin: 0 !important;
+    align-items: center;
+}
+
+.main-filters-section .filter-buttons-row .filter-toggle-btn {
+    margin: 0;
+}
+
+.main-filters-section #main-filters-container {
+    width: 100%;
+    margin: 0;
+}
