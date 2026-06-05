@@ -4906,27 +4906,48 @@ select {
 }
 
 /* =================================================================
-   STORE BANNER COMPACT (v2 redesign — collapse header)
+   STORE BANNER COMPACT (v2 redesign — name moved to header)
+   Banner artık sadece sosyal medya düğmelerini içerir; ad header'a taşındı.
    ================================================================= */
-.store-banner {
-    padding: 10px 16px;
-    margin-bottom: 6px;
-    border-radius: 14px;
+.store-banner.store-banner--compact {
+    background-color: transparent;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    margin-top: 4px;
+    border-radius: 0;
+    border-bottom: none;
+    box-shadow: none;
 }
 
-.store-info h2 {
-    font-size: 17px;
-    line-height: 1.25;
+.store-banner.store-banner--compact .store-banner-content {
+    justify-content: center;
+    gap: 10px;
 }
 
-.store-banner p {
-    font-size: 12.5px;
-    margin-top: 3px;
-    line-height: 1.3;
+.store-banner.store-banner--compact .store-social-buttons-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
-@media (min-width: 1200px) {
-    .store-banner { padding: 12px 22px; }
-    .store-info h2,
-    .store-banner-content h2 { font-size: 19px; }
+/* ✅ Logo-text (mağaza adı header'da) — uzun adlar kırpılsın */
+.logo-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+@media (max-width: 768px) {
+    .logo-text {
+        max-width: 140px;
+    }
+}
+
+@media (max-width: 480px) {
+    .logo-text {
+        max-width: 110px;
+        font-size: 17px;
+    }
 }

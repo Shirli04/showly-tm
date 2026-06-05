@@ -324,6 +324,12 @@
             if (notFoundSection) notFoundSection.style.display = 'none';
             const popularRailHome = document.getElementById('popular-rail-section');
             if (popularRailHome) popularRailHome.style.display = 'none';
+            // ✅ v2: Header'daki mağaza adını temizle (ana sayfada sadece Showly logosu)
+            const logoTextElHome = document.querySelector('.logo-text');
+            if (logoTextElHome) logoTextElHome.textContent = '';
+            // Önceki mağaza state'ini temizle ki updateCartCount doğru çalışsın
+            currentStoreId = null;
+            if (typeof updateCartCount === 'function') updateCartCount();
             document.title = 'Showly - Online Katalog Platformasy';
             return;
         }
@@ -354,6 +360,10 @@
             if (productsGrid) productsGrid.style.display = 'none';
             const popularRail404 = document.getElementById('popular-rail-section');
             if (popularRail404) popularRail404.style.display = 'none';
+            // ✅ v2: 404'te logo metnini temizle
+            const logoText404 = document.querySelector('.logo-text');
+            if (logoText404) logoText404.textContent = '';
+            currentStoreId = null;
             if (notFoundSection) notFoundSection.style.display = 'block';
             document.title = 'Sahypa tapylmady - Showly';
         }
@@ -1158,28 +1168,20 @@
                 productsGrid.style.display = 'grid';
             }
 
-            // ✅ Banner skeleton/içerik sadece mağaza değiştiğinde güncellenir
-            if (isNewStore && storeBanner) {
-                storeBanner.style.display = 'block';
-                storeBanner.innerHTML = '<div class="banner-skeleton"></div>';
+            // ✅ v2 REDESIGN: Mağaza adı header'a taşındı, banner sadece sosyal düğmeleri içerir.
+            if (isNewStore) {
+                const logoTextEl = document.querySelector('.logo-text');
+                if (logoTextEl) logoTextEl.textContent = store.name;
             }
 
-            // Mağaza banner içeriğini oluştur (Sadece yeni mağaza ise)
+            // Banner sadece sosyal düğmeleri içerir — düğme yoksa tamamen gizlenir.
             if (isNewStore && storeBanner) {
-                const storeViews = store.views || 0;
+                storeBanner.classList.add('store-banner--compact');
                 storeBanner.innerHTML = `
                     <div class="store-banner-content" style="position: relative;">
-                        
-                        <div class="store-info">
-                            <h2 id="store-banner-name"></h2>
-                            <p id="store-banner-text"></p>
-                        </div>
-                        <div class="store-social-buttons-container" id="social-buttons-grid">
-                        </div>
+                        <div class="store-social-buttons-container" id="social-buttons-grid"></div>
                     </div>
                 `;
-                document.getElementById('store-banner-name').textContent = store.name;
-                document.getElementById('store-banner-text').textContent = store.customBannerText || '';
             }
 
             const socialGrid = document.getElementById('social-buttons-grid');
@@ -1211,6 +1213,12 @@
                     link.target = '_blank'; link.className = 'social-button location-button';
                     link.innerHTML = '<i class="fas fa-map-marker-alt"></i>';
                     socialGrid.appendChild(link);
+                }
+                // ✅ Sosyal düğme yoksa banner'ı tamamen gizle (header'da zaten ad var)
+                if (socialGrid.children.length === 0) {
+                    if (storeBanner) storeBanner.style.display = 'none';
+                } else {
+                    if (storeBanner) storeBanner.style.display = 'block';
                 }
             }
         }
@@ -1813,11 +1821,14 @@
 
     const updateCartCount = () => {
         let total = 0;
-        // Sadece mevcut mağazanın sepetini say
-        if (currentStoreId && cart[currentStoreId]) {
-            total = cart[currentStoreId].items.reduce((sum, item) => sum + item.quantity, 0);
+        // Bir mağaza açıksa SADECE o mağazanın sepetini say.
+        // (Mağaza seçiliyse ve o mağazanın sepeti boşsa, başka mağazalardaki ürünler sayılmamalı.)
+        if (currentStoreId) {
+            if (cart[currentStoreId]) {
+                total = cart[currentStoreId].items.reduce((sum, item) => sum + item.quantity, 0);
+            }
         } else {
-            // Mağaza seçili değilse tüm sepeti say
+            // Ana sayfada (mağaza seçili değil) tüm sepeti say
             Object.values(cart).forEach(storeCart => {
                 total += storeCart.items.reduce((sum, item) => sum + item.quantity, 0);
             });
