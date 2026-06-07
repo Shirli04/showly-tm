@@ -12,6 +12,12 @@ function sanitizeSegment(value) {
     .slice(0, 80) || 'misc';
 }
 
+const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+const ALLOWED_IMAGE_MIMES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif'
+]);
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
 const storage = multer.diskStorage({
   destination(req, file, cb) {
     const folder = sanitizeSegment(req.body.folder || req.query.folder || 'general');
@@ -26,7 +32,23 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+function imageFileFilter(req, file, cb) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  const mime = String(file.mimetype || '').toLowerCase();
+  if (!ALLOWED_IMAGE_EXTS.has(ext)) {
+    return cb(new Error('Only image files are allowed (jpg, jpeg, png, webp, gif)'));
+  }
+  if (!ALLOWED_IMAGE_MIMES.has(mime)) {
+    return cb(new Error('Invalid image content type'));
+  }
+  cb(null, true);
+}
+
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+  fileFilter: imageFileFilter
+});
 
 function getPublicUploadPath(absoluteFilePath) {
   const relativePath = path.relative(env.uploadDir, absoluteFilePath).split(path.sep).join('/');
@@ -34,8 +56,15 @@ function getPublicUploadPath(absoluteFilePath) {
 }
 
 function resolveUploadFile(publicPathname) {
-  const normalized = String(publicPathname || '').replace(env.publicUploadBase, '').replace(/^\/+/, '');
-  return path.join(env.uploadDir, normalized);
+  const raw = String(publicPathname || '').replace(env.publicUploadBase, '').replace(/^\/+/, '');
+  // path.normalize+resolve ile gerçek hedef yolunu hesapla
+  const candidate = path.resolve(env.uploadDir, raw);
+  const allowedRoot = path.resolve(env.uploadDir);
+  // Güvenlik: hedef yol uploadDir içinde olmalı (path traversal koruması)
+  if (candidate !== allowedRoot && !candidate.startsWith(allowedRoot + path.sep)) {
+    throw new Error('Invalid upload path');
+  }
+  return candidate;
 }
 
 module.exports = {

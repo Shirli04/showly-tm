@@ -4588,12 +4588,61 @@ select {
     z-index: 1;
 }
 
-/* Quantity stepper */
-#product-modal .product-detail-actions.pm-qrow {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 18px;
+/* ✅ Modal info spacing — kompakt, sade görünüm */
+#product-modal.pm-v2 .product-detail-info h2 {
+    margin-bottom: 6px;
+    font-size: 22px;
+}
+#product-modal.pm-v2 .product-detail-price {
+    margin-bottom: 8px;
+    margin-top: 0;
+}
+#product-modal.pm-v2 #modal-description {
+    margin-bottom: 10px;
+    margin-top: 0;
+    color: #6b6b6b;
+    font-size: 14px;
+    line-height: 1.45;
+}
+#product-modal.pm-v2 #modal-description:empty,
+#product-modal.pm-v2 #modal-description[style*="display: none"] {
+    display: none !important;
+    margin: 0;
+}
+#product-modal.pm-v2 #modal-material-row {
+    margin-bottom: 10px;
+    margin-top: 0;
+    font-size: 14px;
+}
+#product-modal.pm-v2 .product-variants {
+    margin: 0 0 10px 0;
+}
+#product-modal.pm-v2 .product-variants:empty {
+    display: none;
+    margin: 0;
+}
+
+/* Quantity stepper — sol tarafta stepper, sağda Sebede goş butonu (force row) */
+#product-modal .product-detail-actions.pm-qrow,
+#product-modal.pm-v2 .product-detail-actions.pm-qrow {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    margin-top: 6px !important;
+    width: 100%;
+}
+
+#product-modal.pm-v2 .pm-qrow > .pm-stepper {
+    flex: 0 0 auto !important;
+}
+
+#product-modal.pm-v2 .pm-qrow > .btn-add-cart {
+    flex: 1 1 0% !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
 }
 
 .pm-stepper {
@@ -4931,24 +4980,36 @@ select {
     gap: 10px;
 }
 
-/* ✅ Logo-text (mağaza adı header'da) — uzun adlar kırpılsın */
+/* ✅ Logo-text (mağaza adı header'da) — adaptif boyut, uzun adlar 2 satıra geçsin */
 .logo-text {
-    white-space: nowrap;
+    font-size: clamp(15px, 4.2vw, 22px);
+    line-height: 1.15;
+    max-width: clamp(140px, 42vw, 320px);
+    /* Çok uzun isimler için 2 satıra izin ver (ellipsis yerine) */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 220px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-overflow: clip;
 }
 
+/* Mağaza açıkken (logo--has-store-name class'lı) mobile'da Showly platform logosunu gizle → mağaza adı için yer aç */
 @media (max-width: 768px) {
+    .logo--has-store-name .header-logo {
+        display: none;
+    }
     .logo-text {
-        max-width: 140px;
+        max-width: clamp(160px, 60vw, 280px);
     }
 }
 
 @media (max-width: 480px) {
     .logo-text {
-        max-width: 110px;
-        font-size: 17px;
+        font-size: 16px;
+        max-width: calc(100vw - 180px); /* favs + lang + menu için 180px ayır */
     }
 }
 

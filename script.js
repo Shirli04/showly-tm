@@ -326,7 +326,11 @@
             if (popularRailHome) popularRailHome.style.display = 'none';
             // ✅ v2: Header'daki mağaza adını temizle (ana sayfada sadece Showly logosu)
             const logoTextElHome = document.querySelector('.logo-text');
-            if (logoTextElHome) logoTextElHome.textContent = '';
+            if (logoTextElHome) {
+                logoTextElHome.textContent = '';
+                const logoWrapHome = logoTextElHome.closest('.logo');
+                if (logoWrapHome) logoWrapHome.classList.remove('logo--has-store-name');
+            }
             // Önceki mağaza state'ini temizle ki updateCartCount doğru çalışsın
             currentStoreId = null;
             if (typeof updateCartCount === 'function') updateCartCount();
@@ -362,7 +366,11 @@
             if (popularRail404) popularRail404.style.display = 'none';
             // ✅ v2: 404'te logo metnini temizle
             const logoText404 = document.querySelector('.logo-text');
-            if (logoText404) logoText404.textContent = '';
+            if (logoText404) {
+                logoText404.textContent = '';
+                const logoWrap404 = logoText404.closest('.logo');
+                if (logoWrap404) logoWrap404.classList.remove('logo--has-store-name');
+            }
             currentStoreId = null;
             if (notFoundSection) notFoundSection.style.display = 'block';
             document.title = 'Sahypa tapylmady - Showly';
@@ -1166,7 +1174,11 @@
             // ✅ v2 REDESIGN: Mağaza adı header'a taşındı, banner sadece sosyal düğmeleri içerir.
             if (isNewStore) {
                 const logoTextEl = document.querySelector('.logo-text');
-                if (logoTextEl) logoTextEl.textContent = store.name;
+                if (logoTextEl) {
+                    logoTextEl.textContent = store.name;
+                    const logoWrap = logoTextEl.closest('.logo');
+                    if (logoWrap) logoWrap.classList.add('logo--has-store-name');
+                }
             }
 
             // Banner sadece sosyal düğmeleri içerir — düğme yoksa tamamen gizlenir.
@@ -1396,7 +1408,8 @@
                 const readyMealsHeader = document.createElement('div');
                 readyMealsHeader.className = 'category-section-header';
                 readyMealsHeader.setAttribute('data-category-section', READY_MEAL_CATEGORY_KEY);
-                readyMealsHeader.innerHTML = `<h3>${READY_MEAL_CATEGORY_TITLE}</h3>`;
+                readyMealsHeader.innerHTML = `<h3></h3>`;
+                readyMealsHeader.querySelector('h3').textContent = READY_MEAL_CATEGORY_TITLE;
                 productsFragment.appendChild(readyMealsHeader);
 
                 readyMealProducts.forEach((product, index) => {
@@ -1420,7 +1433,8 @@
                     categoryHeader.className = 'category-section-header';
                     // Scroll-Spy için data-category-section özelliğine orijinal ismi atamak daha güvenli (butonlar orijinal isim arıyor)
                     categoryHeader.setAttribute('data-category-section', rawCat);
-                    categoryHeader.innerHTML = `<h3>${displayName}</h3>`;
+                    categoryHeader.innerHTML = `<h3></h3>`;
+                    categoryHeader.querySelector('h3').textContent = displayName;
                     productsFragment.appendChild(categoryHeader);
                     lastCategoryDisplay = displayName;
                 }
@@ -1863,6 +1877,22 @@
     };
 
     // ============================================================
+    // ✅ Güvenlik: HTML escape (XSS koruması)
+    // ============================================================
+    function escapeHtml(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(str) {
+        return escapeHtml(str);
+    }
+
+    // ============================================================
     // PRODUCT MODAL v2 — fitImage, quantity stepper, upsell rail
     // ============================================================
     const PM_FRAME_RATIO = 4 / 3;
@@ -1923,13 +1953,14 @@
             const name = getProductField(p, 'name', lang) || '';
             const price = p.price || '';
             const imgUrl = getOptimizedImageUrl(p.imageUrl, 200);
+            const safeUrl = encodeURI(imgUrl).replace(/'/g, '%27');
             return `
-                <div class="pm-upsell-card" data-product-id="${p.id}">
-                    <div class="pm-upsell-img" style="background-image:url('${imgUrl}')"></div>
-                    <button type="button" class="pm-upsell-plus" data-product-id="${p.id}" aria-label="+">+</button>
+                <div class="pm-upsell-card" data-product-id="${escapeAttr(p.id)}">
+                    <div class="pm-upsell-img" style="background-image:url('${safeUrl}')"></div>
+                    <button type="button" class="pm-upsell-plus" data-product-id="${escapeAttr(p.id)}" aria-label="+">+</button>
                     <div class="pm-upsell-body">
-                        <div class="pm-upsell-name">${name}</div>
-                        <div class="pm-upsell-price">${price}</div>
+                        <div class="pm-upsell-name">${escapeHtml(name)}</div>
+                        <div class="pm-upsell-price">${escapeHtml(price)}</div>
                     </div>
                 </div>
             `;
@@ -1957,16 +1988,17 @@
             const name = getProductField(p, 'name', lang) || '';
             const price = p.price || '';
             const imgUrl = getOptimizedImageUrl(p.imageUrl, 280);
+            const safeUrl = encodeURI(imgUrl);
             return `
-                <div class="popular-card" data-product-id="${p.id}">
+                <div class="popular-card" data-product-id="${escapeAttr(p.id)}">
                     <div class="popular-card-badge">HIT</div>
                     <div class="popular-card-img-wrap">
-                        <img class="popular-card-img" src="${imgUrl}" alt="${name}" loading="lazy">
+                        <img class="popular-card-img" src="${escapeAttr(safeUrl)}" alt="${escapeAttr(name)}" loading="lazy">
                     </div>
-                    <button type="button" class="popular-card-plus" data-product-id="${p.id}" aria-label="+">+</button>
+                    <button type="button" class="popular-card-plus" data-product-id="${escapeAttr(p.id)}" aria-label="+">+</button>
                     <div class="popular-card-body">
-                        <div class="popular-card-name">${name}</div>
-                        <div class="popular-card-price">${price}</div>
+                        <div class="popular-card-name">${escapeHtml(name)}</div>
+                        <div class="popular-card-price">${escapeHtml(price)}</div>
                     </div>
                 </div>
             `;
@@ -3039,9 +3071,14 @@
             if (modalBadge) modalBadge.style.display = 'none';
         }
 
-        // ✅ GÜNCELLENDİ: Çok dilli modal açıklama
-        // ✅ GÜNCELLENDİ: Çok dilli modal açıklama ve materyal
-        document.getElementById('modal-description').textContent = getProductField(product, 'desc', getSelectedLang());
+        // ✅ GÜNCELLENDİ: Çok dilli modal açıklama — boşsa veya sadece tire ise gizle
+        const modalDescEl = document.getElementById('modal-description');
+        const descText = (getProductField(product, 'desc', getSelectedLang()) || '').trim();
+        const descIsEmpty = !descText || descText === '-' || descText === '—' || descText === '–';
+        if (modalDescEl) {
+            modalDescEl.textContent = descIsEmpty ? '' : descText;
+            modalDescEl.style.display = descIsEmpty ? 'none' : '';
+        }
         // Material kontrolu - bossa satırı gizle
         const materialRow = document.getElementById('modal-material-row');
         const productMaterial = getProductField(product, 'material', getSelectedLang());
@@ -3685,7 +3722,13 @@
                 const product = allProducts.find(p => String(p.id) === String(productId));
                 if (product) {
                     document.getElementById('modal-title').textContent = getProductField(product, 'name', newLang);
-                    document.getElementById('modal-description').textContent = getProductField(product, 'desc', newLang);
+                    const descElLang = document.getElementById('modal-description');
+                    const descLangText = (getProductField(product, 'desc', newLang) || '').trim();
+                    const descLangEmpty = !descLangText || descLangText === '-' || descLangText === '—' || descLangText === '–';
+                    if (descElLang) {
+                        descElLang.textContent = descLangEmpty ? '' : descLangText;
+                        descElLang.style.display = descLangEmpty ? 'none' : '';
+                    }
 
                     const modalMaterial = getProductField(product, 'material', newLang);
                     const materialRow = document.getElementById('modal-material-row');

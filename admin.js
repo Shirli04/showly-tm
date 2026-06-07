@@ -572,7 +572,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const storeSlug = store.slug || store.id;
             row.querySelector('.store-id-cell').textContent = store.id;
             row.querySelector('.store-name-cell').textContent = store.name;
-            row.querySelector('.store-url-cell').innerHTML = `<a href="/${storeSlug}" target="_blank" class="store-link">/${storeSlug}</a>`;
+            const storeLinkCell = row.querySelector('.store-url-cell');
+            storeLinkCell.innerHTML = '';
+            const storeLink = document.createElement('a');
+            storeLink.href = `/${encodeURIComponent(storeSlug)}`;
+            storeLink.target = '_blank';
+            storeLink.rel = 'noopener noreferrer';
+            storeLink.className = 'store-link';
+            storeLink.textContent = `/${storeSlug}`;
+            storeLinkCell.appendChild(storeLink);
             row.querySelector('.store-products-count-cell').textContent = storeProducts.length;
             return row;
         });
@@ -1846,7 +1854,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (isReservation || isBron) {
                         // Bron/Ziyafet ise anlaşılır ismi göster
-                        li.innerHTML = `<span style="font-weight:600; font-size:13px;">${item.title || 'Belirtilmedi'}</span>`;
+                        li.innerHTML = '<span style="font-weight:600; font-size:13px;"></span>';
+                        li.querySelector('span').textContent = item.title || 'Belirtilmedi';
                     } else {
                         // Normal ürün siparişi ise (kullanıcının önceki isteği üzerine) sadece Haryt ID göster
                         li.textContent = item.id || 'ID Yok';

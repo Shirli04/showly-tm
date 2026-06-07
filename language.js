@@ -91,9 +91,9 @@
             en: 'Popular'
         },
         upsell_title: {
-            tm: 'Ýanyna gowy görünýär',
-            ru: 'Хорошо подходит',
-            en: 'Goes well with'
+            tm: 'Maslahat berýäris',
+            ru: 'Рекомендуем',
+            en: 'We recommend'
         },
 
         // Cart Modal

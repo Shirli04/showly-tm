@@ -66,7 +66,58 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
+// ✅ Login brute-force koruması (in-memory rate limiter)
+// IP başına 5 dakika içinde 5 yanlış deneme → 15 dakika engel
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;    // 5 dk pencere
+const LOGIN_MAX_ATTEMPTS = 5;             // 5 yanlış deneme
+const LOGIN_BLOCK_MS = 15 * 60 * 1000;    // 15 dk engel
+const loginAttempts = new Map();          // ip → { count, firstAt, blockedUntil }
+
+function getClientIp(req) {
+  const xf = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xf || req.ip || req.connection?.remoteAddress || 'unknown';
+}
+
+function checkLoginRateLimit(req) {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const rec = loginAttempts.get(ip);
+  if (rec && rec.blockedUntil && rec.blockedUntil > now) {
+    const remain = Math.ceil((rec.blockedUntil - now) / 1000);
+    throw new HttpError(429, `Too many failed attempts. Try again in ${remain}s`);
+  }
+}
+
+function recordLoginFailure(req) {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  let rec = loginAttempts.get(ip);
+  if (!rec || (now - rec.firstAt) > LOGIN_WINDOW_MS) {
+    rec = { count: 0, firstAt: now, blockedUntil: 0 };
+  }
+  rec.count += 1;
+  if (rec.count >= LOGIN_MAX_ATTEMPTS) {
+    rec.blockedUntil = now + LOGIN_BLOCK_MS;
+  }
+  loginAttempts.set(ip, rec);
+}
+
+function recordLoginSuccess(req) {
+  loginAttempts.delete(getClientIp(req));
+}
+
+// Bellek temizliği (sızıntı önleme): 30 dakikada bir eski kayıtları sil
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, rec] of loginAttempts.entries()) {
+    const expired = (now - rec.firstAt) > LOGIN_WINDOW_MS && (!rec.blockedUntil || rec.blockedUntil < now);
+    if (expired) loginAttempts.delete(ip);
+  }
+}, 30 * 60 * 1000).unref?.();
+
 app.post('/api/auth/login', asyncHandler(async (req, res) => {
+  checkLoginRateLimit(req);
+
   const { username, password } = req.body || {};
   if (!username || !password) {
     throw new HttpError(400, 'Username and password are required');
@@ -74,6 +125,7 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
 
   const user = await getUserWithPasswordByUsername(username.trim());
   if (!user) {
+    recordLoginFailure(req);
     throw new HttpError(401, 'Invalid username or password');
   }
 
@@ -82,8 +134,11 @@ app.post('/api/auth/login', asyncHandler(async (req, res) => {
   const isValid = isHash ? await bcrypt.compare(password, hash) : password === hash;
 
   if (!isValid) {
+    recordLoginFailure(req);
     throw new HttpError(401, 'Invalid username or password');
   }
+
+  recordLoginSuccess(req);
 
   const payload = {
     id: user.id,
@@ -120,7 +175,19 @@ app.get('/api/catalog/bootstrap', asyncHandler(async (req, res) => {
   res.json(await getCatalogBootstrap());
 }));
 
-app.post('/api/uploads', requireAuth, upload.single('file'), asyncHandler(async (req, res) => {
+function handleUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE'
+        ? 'File too large (max 10 MB)'
+        : (err.message || 'Upload error');
+      return next(new HttpError(400, msg));
+    }
+    next();
+  });
+}
+
+app.post('/api/uploads', requireAuth, handleUpload, asyncHandler(async (req, res) => {
   if (!req.file) {
     throw new HttpError(400, 'File is required');
   }
@@ -138,7 +205,13 @@ app.delete('/api/uploads', requireAuth, asyncHandler(async (req, res) => {
     throw new HttpError(400, 'filePath is required');
   }
 
-  const absolutePath = resolveUploadFile(filePath);
+  let absolutePath;
+  try {
+    absolutePath = resolveUploadFile(filePath);
+  } catch (err) {
+    throw new HttpError(400, 'Invalid file path');
+  }
+
   if (fs.existsSync(absolutePath)) {
     fs.unlinkSync(absolutePath);
   }
