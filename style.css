@@ -4996,20 +4996,24 @@ select {
     text-overflow: clip;
 }
 
-/* Mağaza açıkken (logo--has-store-name class'lı) mobile'da Showly platform logosunu gizle → mağaza adı için yer aç */
+/* Mobile'da Showly platform logosu her zaman görünür — mağaza adı yanına gelir */
 @media (max-width: 768px) {
-    .logo--has-store-name .header-logo {
-        display: none;
-    }
     .logo-text {
-        max-width: clamp(160px, 60vw, 280px);
+        max-width: clamp(140px, 50vw, 240px);
+        font-size: clamp(14px, 3.8vw, 18px);
+    }
+    .header-logo {
+        height: 32px; /* küçük ekranda biraz küçült, ama görünür kalsın */
     }
 }
 
 @media (max-width: 480px) {
     .logo-text {
-        font-size: 16px;
-        max-width: calc(100vw - 180px); /* favs + lang + menu için 180px ayır */
+        font-size: 15px;
+        max-width: calc(100vw - 200px); /* logo + favs + lang + menu için 200px */
+    }
+    .header-logo {
+        height: 28px;
     }
 }
 
