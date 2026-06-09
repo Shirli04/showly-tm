@@ -22,6 +22,7 @@ const {
   deleteByResource,
   getUserWithPasswordByUsername,
   saveUserFcmToken,
+  removeUserFcmToken,
   getCatalogBootstrap,
   commitBatch
 } = require('./services/repository');
@@ -168,6 +169,16 @@ app.post('/api/auth/fcm-token', requireAuth, asyncHandler(async (req, res) => {
   }
 
   await saveUserFcmToken(req.user.id, token);
+  res.json({ success: true });
+}));
+
+app.post('/api/auth/fcm-token/remove', requireAuth, asyncHandler(async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (!token) {
+    throw new HttpError(400, 'token is required');
+  }
+
+  await removeUserFcmToken(req.user.id, token);
   res.json({ success: true });
 }));
 
@@ -548,35 +559,81 @@ app.get('/api/collections/:name/:id', asyncHandler(async (req, res) => {
   res.json(document);
 }));
 
-app.post('/api/collections/:name', asyncHandler(async (req, res, next) => {
+// ✅ Güvenlik: Collections rotalarına resource'a uygun yetki kontrolleri ekle.
+// Her resource için ilgili middleware zincirini döndür.
+function collectionsWriteGuards(resource) {
+  if (resource === 'orders') return [];                                  // POST için public, PUT/DELETE'te aşağıda ayrı kontrol
+  if (resource === 'users') return [requireAuth, requireSuperAdmin];     // sadece superadmin
+  if (resource === 'stores') return [requireAuth, requireStoreWriteAccess];
+  if (resource === 'products') return [requireAuth, requireProductWriteAccess];
+  if (resource === 'settings') return [requireAuth, requireRoleOrPermission('settings')];
+  if (resource === 'parentCategories' || resource === 'subcategories') {
+    return [requireAuth, requireRoleOrPermission('categories')];
+  }
+  if (resource === 'reservationPackages') return [requireAuth, requireRoleOrPermission('reservations')];
+  // Bilinmeyen resource için varsayılan: en sıkı (superadmin)
+  return [requireAuth, requireSuperAdmin];
+}
+
+function runMiddlewareChain(req, res, middlewares) {
+  return new Promise((resolve, reject) => {
+    let i = 0;
+    const step = (err) => {
+      if (err) return reject(err);
+      if (i >= middlewares.length) return resolve();
+      const mw = middlewares[i++];
+      try {
+        mw(req, res, step);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    step();
+  });
+}
+
+app.post('/api/collections/:name', asyncHandler(async (req, res) => {
   const resource = collectionToResource[req.params.name];
   if (!resource) throw new HttpError(404, 'Unknown collection');
 
-  if (resource !== 'orders') {
-    return requireAuth(req, res, async (authError) => {
-      if (authError) return next(authError);
-      return res.status(201).json(await upsertResource(resource, req.body));
-    });
+  // orders: müşteri sipariş verebilir (public)
+  if (resource === 'orders') {
+    return res.status(201).json(await upsertResource(resource, req.body));
   }
 
+  // Diğer kaynaklarda resource'a uygun yetki kontrolü uygula
+  await runMiddlewareChain(req, res, collectionsWriteGuards(resource));
   res.status(201).json(await upsertResource(resource, req.body));
 }));
 
-app.put('/api/collections/:name/:id', requireAuth, asyncHandler(async (req, res) => {
+app.put('/api/collections/:name/:id', asyncHandler(async (req, res) => {
   const resource = collectionToResource[req.params.name];
   if (!resource) throw new HttpError(404, 'Unknown collection');
+  // orders update için sadece auth+orders yetkisi
+  const guards = resource === 'orders'
+    ? [requireAuth, requireRoleOrPermission('orders')]
+    : collectionsWriteGuards(resource);
+  await runMiddlewareChain(req, res, guards);
   res.json(await upsertResource(resource, req.body, req.params.id));
 }));
 
-app.patch('/api/collections/:name/:id', requireAuth, asyncHandler(async (req, res) => {
+app.patch('/api/collections/:name/:id', asyncHandler(async (req, res) => {
   const resource = collectionToResource[req.params.name];
   if (!resource) throw new HttpError(404, 'Unknown collection');
+  const guards = resource === 'orders'
+    ? [requireAuth, requireRoleOrPermission('orders')]
+    : collectionsWriteGuards(resource);
+  await runMiddlewareChain(req, res, guards);
   res.json(await upsertResource(resource, req.body, req.params.id));
 }));
 
-app.delete('/api/collections/:name/:id', requireAuth, asyncHandler(async (req, res) => {
+app.delete('/api/collections/:name/:id', asyncHandler(async (req, res) => {
   const resource = collectionToResource[req.params.name];
   if (!resource) throw new HttpError(404, 'Unknown collection');
+  const guards = resource === 'orders'
+    ? [requireAuth, requireRoleOrPermission('orders')]
+    : collectionsWriteGuards(resource);
+  await runMiddlewareChain(req, res, guards);
   await deleteByResource(resource, req.params.id);
   res.status(204).send();
 }));

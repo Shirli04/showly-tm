@@ -335,6 +335,18 @@ async function getUserWithPasswordByUsername(username) {
   return result.rows[0] || null;
 }
 
+async function removeUserFcmToken(userId, token) {
+  if (!userId || !token) return;
+  await query(`
+    UPDATE users
+    SET
+      fcm_tokens = array_remove(COALESCE(fcm_tokens, ARRAY[]::text[]), $2),
+      fcm_token = CASE WHEN fcm_token = $2 THEN NULL ELSE fcm_token END,
+      updated_at = NOW()
+    WHERE id = $1
+  `, [userId, token]);
+}
+
 async function saveUserFcmToken(userId, token) {
   if (!userId || !token) {
     throw new HttpError(400, 'userId and token are required');
@@ -893,6 +905,7 @@ module.exports = {
   deleteByResource,
   getUserWithPasswordByUsername,
   saveUserFcmToken,
+  removeUserFcmToken,
   listFcmTokensByStoreId,
   getCatalogBootstrap,
   commitBatch

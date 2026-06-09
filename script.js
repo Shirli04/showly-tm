@@ -3211,7 +3211,7 @@
                 sharedServicesHtml = pkg.serviceFeatures.map(f => `
                     <li style="margin-bottom: 8px; font-size: 14px; color: #333; display: flex; align-items: flex-start; gap: 10px;">
                         <i class="fas fa-check" style="color: var(--primary-color); font-size: 12px; margin-top: 3px; flex-shrink: 0;"></i>
-                        <span style="font-weight: 500;">${f.name || f}</span>
+                        <span style="font-weight: 500;">${escapeHtml(f.name || f)}</span>
                     </li>
                 `).join('');
             }
@@ -3225,7 +3225,7 @@
                         menuHtml: `
                             <li style="margin-bottom: 6px; font-size: 14px; color: #333; display: flex; align-items: flex-start; gap: 8px;">
                                 <i class="fas fa-check" style="color: var(--primary-color); font-size: 12px; margin-top: 4px;"></i>
-                                <span style="font-weight: 500; white-space: pre-line;">${item.name}</span>
+                                <span style="font-weight: 500; white-space: pre-line;">${escapeHtml(item.name)}</span>
                             </li>
                         `
                     });
