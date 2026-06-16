@@ -411,8 +411,8 @@ async function upsertStore(payload, id) {
 
   // DEBUG: mobil app categoryOrder gönderiyor mu?
   console.log('[upsertStore] id:', id);
-  console.log('[upsertStore] payload.categoryOrder:', payload?.categoryOrder);
-  console.log('[upsertStore] data.categoryOrder:', data?.categoryOrder);
+  console.log('[upsertStore] payload keys:', Object.keys(payload || {}));
+  console.log('[upsertStore] full payload:', JSON.stringify(payload).slice(0, 800));
   console.log('[upsertStore] source.categoryOrder:', source?.categoryOrder);
   const categoryRef = parseCategoryReference(data.category);
   const normalized = {
