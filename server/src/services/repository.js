@@ -409,11 +409,6 @@ async function upsertStore(payload, id) {
   const current = id ? await getStore(id) : null;
   const source = current ? { ...current, ...data } : data;
 
-  // DEBUG: mobil app categoryOrder gönderiyor mu?
-  console.log('[upsertStore] id:', id);
-  console.log('[upsertStore] payload keys:', Object.keys(payload || {}));
-  console.log('[upsertStore] full payload:', JSON.stringify(payload).slice(0, 800));
-  console.log('[upsertStore] source.categoryOrder:', source?.categoryOrder);
   const categoryRef = parseCategoryReference(data.category);
   const normalized = {
     id: id || data.id,

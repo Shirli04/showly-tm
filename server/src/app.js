@@ -521,6 +521,17 @@ app.post('/api/stores/:id/view', asyncHandler(async (req, res) => {
   await upsertResource('stores', { views: { __increment: 1 } }, req.params.id);
   res.json({ success: true });
 }));
+
+// Kategori sırasını doğrudan kaydeden basit endpoint (mobil için)
+app.patch('/api/stores/:id/category-order', requireAuth, asyncHandler(async (req, res) => {
+  const order = Array.isArray(req.body?.categoryOrder) ? req.body.categoryOrder : [];
+  const { query } = require('./config/db');
+  await query(
+    `UPDATE stores SET category_order = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+    [JSON.stringify(order), req.params.id]
+  );
+  res.json({ success: true, categoryOrder: order });
+}));
 createCrudRoutes('/api/users', 'users');
 createCrudRoutes('/api/categories/parents', 'parentCategories');
 createCrudRoutes('/api/categories/subcategories', 'subcategories');
