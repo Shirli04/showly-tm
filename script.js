@@ -643,13 +643,25 @@
         // (hasFeaturedCategory bolsa-da chip goşulmaýar)
 
         // Kategori butonları
-        // ✅ YENİ: Kategorileri ekranda gösterilecek ismine göre (displayCat) alfabetik sırala
+        // Önce mağazanın belirlediği sıraya bak, sonra alfabetik (sortedProducts ile aynı mantık)
+        const storeForChips = allStores.find(s => s.id === storeId);
+        const chipCategoryOrder = Array.isArray(storeForChips?.categoryOrder) ? storeForChips.categoryOrder : [];
+
         const sortedCategories = Array.from(categoriesMap.entries())
             .filter(([baseCat, displayCat]) => {
                 if (!hasReadyMealCategory) return true;
                 return !isReadyMealCategoryName(displayCat || baseCat);
             })
             .sort((a, b) => {
+                const rawA = (a[0] || '').trim();
+                const rawB = (b[0] || '').trim();
+
+                const idxA = chipCategoryOrder.indexOf(rawA);
+                const idxB = chipCategoryOrder.indexOf(rawB);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+
                 const displayA = a[1].toLowerCase();
                 const displayB = b[1].toLowerCase();
                 return displayA.localeCompare(displayB);

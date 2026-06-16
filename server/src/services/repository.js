@@ -408,6 +408,12 @@ async function upsertStore(payload, id) {
   const data = deepReplaceFieldValueMarkers(payload);
   const current = id ? await getStore(id) : null;
   const source = current ? { ...current, ...data } : data;
+
+  // DEBUG: mobil app categoryOrder gönderiyor mu?
+  console.log('[upsertStore] id:', id);
+  console.log('[upsertStore] payload.categoryOrder:', payload?.categoryOrder);
+  console.log('[upsertStore] data.categoryOrder:', data?.categoryOrder);
+  console.log('[upsertStore] source.categoryOrder:', source?.categoryOrder);
   const categoryRef = parseCategoryReference(data.category);
   const normalized = {
     id: id || data.id,
