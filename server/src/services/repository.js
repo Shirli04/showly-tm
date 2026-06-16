@@ -79,6 +79,7 @@ function normalizeStore(row) {
     stoplistProductIds: ensureArray(row.stoplist_product_ids),
     tables: ensureArray(row.tables),
     views: row.views || 0,
+    categoryOrder: ensureArray(row.category_order),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -431,6 +432,7 @@ async function upsertStore(payload, id) {
     stoplistProductsEnabled: Boolean(source.stoplistProductsEnabled),
     stoplistProductIds: ensureArray(source.stoplistProductIds),
     tables: ensureArray(source.tables),
+    categoryOrder: ensureArray(source.categoryOrder),
     viewsIncrement: data.views && data.views.__increment ? Number(data.views.__increment) : 0,
     viewsValue: typeof data.views === 'number' ? data.views : (current ? current.views : null)
   };
@@ -447,7 +449,7 @@ async function upsertStore(payload, id) {
       featured_products_enabled, featured_product_ids,
       ready_meal_products_enabled, ready_meal_product_ids,
       stoplist_products_enabled, stoplist_product_ids,
-      tables, views
+      tables, views, category_order
     ) VALUES (
       COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
       $7, $8, $9, $10, $11, $12,
@@ -455,7 +457,7 @@ async function upsertStore(payload, id) {
       $16, $17::jsonb,
       $18, $19::jsonb,
       $20, $21::jsonb,
-      $22::jsonb, COALESCE($23, 0)
+      $22::jsonb, COALESCE($23, 0), $25::jsonb
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
@@ -479,6 +481,7 @@ async function upsertStore(payload, id) {
       stoplist_products_enabled = EXCLUDED.stoplist_products_enabled,
       stoplist_product_ids = EXCLUDED.stoplist_product_ids,
       tables = EXCLUDED.tables,
+      category_order = EXCLUDED.category_order,
       views = CASE
         WHEN $24 <> 0 THEN stores.views + $24
         WHEN $23 IS NOT NULL THEN $23
@@ -510,7 +513,8 @@ async function upsertStore(payload, id) {
     JSON.stringify(normalized.stoplistProductIds),
     JSON.stringify(normalized.tables),
     normalized.viewsValue,
-    normalized.viewsIncrement
+    normalized.viewsIncrement,
+    JSON.stringify(normalized.categoryOrder)
   ]);
 
   return normalizeStore(result.rows[0]);

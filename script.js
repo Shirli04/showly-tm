@@ -1253,6 +1253,9 @@
             const isGlobalPriceSortAsc = activeFilter?.type === 'SORT_PRICE_ASC';
             const isGlobalPriceSortDesc = activeFilter?.type === 'SORT_PRICE_DESC';
 
+            // Mağazanın belirlediği kategori sırası (yoksa boş)
+            const categoryOrder = Array.isArray(store.categoryOrder) ? store.categoryOrder : [];
+
             const sortedProducts = [...storeProducts].sort((a, b) => {
                 const priceA = parseFloat((a.price || '0').replace(' TMT', '')) || 0;
                 const priceB = parseFloat((b.price || '0').replace(' TMT', '')) || 0;
@@ -1261,16 +1264,24 @@
                 if (isGlobalPriceSortAsc) return priceA - priceB;
                 if (isGlobalPriceSortDesc) return priceB - priceA;
 
-                // 2. KATEGORİ GRUPLAMASI VE KATEGORİ İÇİ FİYAT SIRALAMASI (Varsayılan)
-                const rawCatA = a.category || '';
-                const rawCatB = b.category || '';
-                const displayCatA = (getProductField(a, 'category', currentLang) || rawCatA).toLowerCase();
-                const displayCatB = (getProductField(b, 'category', currentLang) || rawCatB).toLowerCase();
+                // 2. KATEGORİ GRUPLAMASI
+                const rawCatA = (a.category || '').trim();
+                const rawCatB = (b.category || '').trim();
 
-                // Eğer kategorileri farklıysa kategori adına göre sırala
-                if (displayCatA !== displayCatB) return displayCatA.localeCompare(displayCatB);
+                if (rawCatA !== rawCatB) {
+                    // Önce mağazanın belirlediği sıraya bak
+                    const idxA = categoryOrder.indexOf(rawCatA);
+                    const idxB = categoryOrder.indexOf(rawCatB);
+                    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                    if (idxA !== -1) return -1; // A'nın sırası var, B'nin yok → A önce
+                    if (idxB !== -1) return 1;  // B'nin sırası var, A'nın yok → B önce
+                    // İkisinin de sırası yok → alfabetik
+                    const displayCatA = (getProductField(a, 'category', currentLang) || rawCatA).toLowerCase();
+                    const displayCatB = (getProductField(b, 'category', currentLang) || rawCatB).toLowerCase();
+                    return displayCatA.localeCompare(displayCatB);
+                }
 
-                // Kullanıcı isteği: Kategori içinde de UCUZDAN PAHALIYA sıralansın.
+                // Kategori içi: ucuzdan pahalıya
                 return priceA - priceB;
             });
 

@@ -63,6 +63,10 @@ async function runMigrations() {
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS plain_password TEXT;
   `);
+  await pool.query(`
+    ALTER TABLE stores
+      ADD COLUMN IF NOT EXISTS category_order JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
 }
 
 async function query(text, params) {
