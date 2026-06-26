@@ -5,6 +5,7 @@ const express = require('express');
 const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const sharp = require('sharp');
 const XLSX = require('xlsx');
 const multer = require('multer');
 const env = require('./config/env');
@@ -29,6 +30,34 @@ const {
 const { sendNewOrderNotification } = require('./services/fcm');
 
 const app = express();
+
+// ✅ Güvenlik #1: Express, nginx (reverse proxy) arkasında olduğu için gerçek
+// istemci IP'sini X-Forwarded-For header'ından okusun. Rate limiter ve loglar
+// bu sayede doğru IP görür.
+app.set('trust proxy', 1);
+
+// ✅ Güvenlik #2: X-Powered-By header'ını kapat (teknoloji fingerprinting'ini engelle)
+app.disable('x-powered-by');
+
+// ✅ Güvenlik #11: Helmet benzeri manuel güvenlik header'ları (paketsiz).
+// nginx zaten ana header'ları gönderiyor, ama doğrudan port 3000'e gelen
+// isteklerde de aynı koruma olsun (defense in depth).
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('X-Download-Options', 'noopen');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=()'
+  );
+  if (env.nodeEnv === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 
 const corsOptions = {
   credentials: true,
@@ -203,11 +232,31 @@ app.post('/api/uploads', requireAuth, handleUpload, asyncHandler(async (req, res
     throw new HttpError(400, 'File is required');
   }
 
-  res.status(201).json({
-    url: getPublicUploadPath(req.file.path),
-    fileName: req.file.filename,
-    originalName: req.file.originalname
-  });
+  const originalPath = req.file.path;
+  const webpPath = originalPath.replace(/\.[^.]+$/, '') + '.webp';
+
+  try {
+    await sharp(originalPath)
+      .rotate() // EXIF orientation'a göre döndür
+      .webp({ quality: 80 })
+      .toFile(webpPath);
+
+    // Orijinal dosyayı sil — sadece webp kalsın
+    if (originalPath !== webpPath) {
+      fs.unlink(originalPath, () => {});
+    }
+
+    res.status(201).json({
+      url: getPublicUploadPath(webpPath),
+      fileName: path.basename(webpPath),
+      originalName: req.file.originalname
+    });
+  } catch (err) {
+    // Dönüştürme başarısız olursa orijinali sil ve hata dön
+    fs.unlink(originalPath, () => {});
+    fs.unlink(webpPath, () => {});
+    throw new HttpError(500, 'Image conversion failed: ' + (err.message || 'unknown'));
+  }
 }));
 
 app.delete('/api/uploads', requireAuth, asyncHandler(async (req, res) => {
@@ -494,7 +543,10 @@ function createCrudRoutes(basePath, resource, options = {}) {
   });
 
   if (options.publicCreate) {
-    app.post(basePath, createHandler);
+    const preCreate = Array.isArray(options.createMiddleware)
+      ? options.createMiddleware
+      : (options.createMiddleware ? [options.createMiddleware] : []);
+    app.post(basePath, ...preCreate, createHandler);
   } else {
     app.post(basePath, ...writeGuards, createHandler);
   }
@@ -515,7 +567,50 @@ function createCrudRoutes(basePath, resource, options = {}) {
 
 createCrudRoutes('/api/stores', 'stores', { writeGuards: [requireAuth, requireStoreWriteAccess] });
 createCrudRoutes('/api/products', 'products', { writeGuards: [requireAuth, requireProductWriteAccess] });
-createCrudRoutes('/api/orders', 'orders', { publicCreate: true });
+
+// ✅ Güvenlik #3: POST /api/orders için IP başına rate-limit (spam koruması)
+// Müşteri sipariş verebilir (public), ama bot dakikada 1000 sahte sipariş gönderemesin.
+const ORDER_RL_WINDOW_MS = 60 * 1000;   // 1 dakika
+const ORDER_RL_MAX = 10;                // 1 dakikada max 10 sipariş
+const orderAttempts = new Map();        // ip → { count, firstAt }
+
+function orderRateLimit(req, res, next) {
+  try {
+    const ip = String(
+      (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+      req.ip || req.connection?.remoteAddress || 'unknown'
+    );
+    const now = Date.now();
+    let rec = orderAttempts.get(ip);
+    if (!rec || (now - rec.firstAt) > ORDER_RL_WINDOW_MS) {
+      rec = { count: 0, firstAt: now };
+    }
+    rec.count += 1;
+    orderAttempts.set(ip, rec);
+    if (rec.count > ORDER_RL_MAX) {
+      const remain = Math.ceil((rec.firstAt + ORDER_RL_WINDOW_MS - now) / 1000);
+      res.setHeader('Retry-After', String(Math.max(1, remain)));
+      return next(new HttpError(429, 'Too many orders. Please slow down.'));
+    }
+    return next();
+  } catch (err) {
+    // Limiter hatası asla sipariş akışını kırmasın
+    return next();
+  }
+}
+
+// 30 dakikada bir eski IP kayıtlarını temizle (bellek sızıntısı önleme)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, rec] of orderAttempts.entries()) {
+    if ((now - rec.firstAt) > ORDER_RL_WINDOW_MS) orderAttempts.delete(ip);
+  }
+}, 30 * 60 * 1000).unref?.();
+
+createCrudRoutes('/api/orders', 'orders', {
+  publicCreate: true,
+  createMiddleware: orderRateLimit
+});
 
 app.post('/api/stores/:id/view', asyncHandler(async (req, res) => {
   await upsertResource('stores', { views: { __increment: 1 } }, req.params.id);

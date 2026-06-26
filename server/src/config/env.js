@@ -25,5 +25,9 @@ module.exports = {
   publicUploadBase: process.env.PUBLIC_UPLOAD_BASE || '/uploads',
   corsOrigin,
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
-  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || ''
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '',
+  // ✅ Sentry — error tracking (DSN .env'den; boş bırakılırsa Sentry kapalı kalır)
+  sentryDsn: process.env.SENTRY_DSN || '',
+  sentryEnvironment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development',
+  sentryTracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1)
 };

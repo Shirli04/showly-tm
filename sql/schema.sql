@@ -136,3 +136,12 @@ CREATE INDEX IF NOT EXISTS idx_products_store_id ON products(store_id);
 CREATE INDEX IF NOT EXISTS idx_orders_store_id ON orders(store_id);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_reservation_packages_store_id ON reservation_packages(store_id);
+
+-- ✅ Performans #7: Yeni indexler (kategori filtresi + sipariş status + bileşik)
+-- Kategori filtreleme: müşteri "Çorbalar" tıkladığında hızlı
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_store_category ON products(store_id, category);
+-- Admin paneli sipariş listesi (status'a göre filtreleme)
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+-- Mağaza sipariş geçmişi (ortak kullanılan filtre: store + tarih)
+CREATE INDEX IF NOT EXISTS idx_orders_store_created ON orders(store_id, created_at DESC);

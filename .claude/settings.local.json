@@ -11,7 +11,12 @@
       "Bash(node -e \"const css=require\\('fs'\\).readFileSync\\('style.css','utf-8'\\); const o=\\(css.match\\(/\\\\{/g\\)||[]\\).length; const c=\\(css.match\\(/\\\\}/g\\)||[]\\).length; console.log\\('css {:', o, '/ }:', c\\);\")",
       "Bash(node --check admin.js)",
       "Bash(node --check server/src/app.js)",
-      "Bash(node --check server/src/services/uploads.js)"
+      "Bash(node --check server/src/services/uploads.js)",
+      "Bash(grep -E \"\\\\.env$|service-account|\\\\.key$|password\")",
+      "Bash(node --check server/src/server.js)",
+      "Bash(node --check server/src/middleware/error-handler.js)",
+      "Bash(node --check server/src/config/env.js)",
+      "Bash(node --check ecosystem.config.js)"
     ]
   }
 }
