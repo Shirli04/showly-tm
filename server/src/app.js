@@ -5,7 +5,6 @@ const express = require('express');
 const morgan = require('morgan');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const sharp = require('sharp');
 const XLSX = require('xlsx');
 const multer = require('multer');
 const env = require('./config/env');
@@ -232,31 +231,11 @@ app.post('/api/uploads', requireAuth, handleUpload, asyncHandler(async (req, res
     throw new HttpError(400, 'File is required');
   }
 
-  const originalPath = req.file.path;
-  const webpPath = originalPath.replace(/\.[^.]+$/, '') + '.webp';
-
-  try {
-    await sharp(originalPath)
-      .rotate() // EXIF orientation'a göre döndür
-      .webp({ quality: 80 })
-      .toFile(webpPath);
-
-    // Orijinal dosyayı sil — sadece webp kalsın
-    if (originalPath !== webpPath) {
-      fs.unlink(originalPath, () => {});
-    }
-
-    res.status(201).json({
-      url: getPublicUploadPath(webpPath),
-      fileName: path.basename(webpPath),
-      originalName: req.file.originalname
-    });
-  } catch (err) {
-    // Dönüştürme başarısız olursa orijinali sil ve hata dön
-    fs.unlink(originalPath, () => {});
-    fs.unlink(webpPath, () => {});
-    throw new HttpError(500, 'Image conversion failed: ' + (err.message || 'unknown'));
-  }
+  res.status(201).json({
+    url: getPublicUploadPath(req.file.path),
+    fileName: req.file.filename,
+    originalName: req.file.originalname
+  });
 }));
 
 app.delete('/api/uploads', requireAuth, asyncHandler(async (req, res) => {
