@@ -379,6 +379,26 @@
                                     <span>Kategorileri Müşterilerden Gizle (Sadece Mağazalar Görünür)</span>
                                 </label>
                             </div>
+                            <!-- ✅ YENİ: Ürünleri Excel olarak indir -->
+                            <div class="backup-section"
+                                style="border-color: #16a085; background: #f0fbf8; margin-top: 20px;">
+                                <h3 style="color: #16a085;"><i class="fas fa-file-excel"></i> Harytlary Excel görnüşinde
+                                    ýükläp al</h3>
+                                <p>Ähli harytlary ýa-da saýlanan magazynyň harytlaryny Excel (.xlsx) faýly hökmünde
+                                    ýükläp alyň.</p>
+                                <div
+                                    style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px;">
+                                    <select id="export-products-store-select"
+                                        style="padding: 10px 15px; border-radius: 8px; border: 2px solid #e0e0e0; background: white; font-weight: 500; min-width: 220px; outline: none; font-size: 14px;">
+                                        <option value="">Ähli magazynlar</option>
+                                    </select>
+                                </div>
+                                <button class="btn-primary" id="export-products-btn" type="button"
+                                    style="background-color: #16a085; margin-top: 12px;">
+                                    <i class="fas fa-download"></i> Excel görnüşinde ýükläp al
+                                </button>
+                            </div>
+
                             <!-- ✅ YENİ: Mağaza Ürünlerini Toplu Silme -->
                             <div class="backup-section"
                                 style="border-color: #e74c3c; background: #fff5f5; margin-top: 20px;">
@@ -844,6 +864,10 @@
                         <input type="text" id="product-name-en" placeholder="Product name in English">
                     </div>
                     <div class="form-group">
+                        <label>Haryt ady (TR)</label>
+                        <input type="text" id="product-name-tr" placeholder="Türkçe ürün adı">
+                    </div>
+                    <div class="form-group">
                         <label>Magazyn</label>
                         <select id="product-store" required>
                         </select>
@@ -862,6 +886,10 @@
                         <textarea id="product-description-en" rows="2" placeholder="Description in English"></textarea>
                     </div>
                     <div class="form-group">
+                        <label>Düşündiriş (TR)</label>
+                        <textarea id="product-description-tr" rows="2" placeholder="Türkçe açıklama"></textarea>
+                    </div>
+                    <div class="form-group">
                         <label>Material</label>
                         <input type="text" id="product-material">
                     </div>
@@ -877,6 +905,10 @@
                     <div class="form-group">
                         <label>Kategoriýa (EN)</label>
                         <input type="text" id="product-category-en" placeholder="Category in English">
+                    </div>
+                    <div class="form-group">
+                        <label>Kategoriýa (TR)</label>
+                        <input type="text" id="product-category-tr" placeholder="Türkçe kategori">
                     </div>
                     <div class="form-group">
                         <label>Baha (TMT)</label>

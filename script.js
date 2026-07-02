@@ -829,8 +829,33 @@
                     // IDB'yi güncelle (Eskileri sil, yenileri ekle)
                     showlyIDB.saveProductsForStore(storeId, freshProducts).catch(() => { });
 
-                    // Eğer daha önce gösterilen ile çekilen MİKTAR farklıysa UI'ı sessizce yenile
-                    if (freshProducts.length !== cachedProducts.length) {
+                    // ✅ Bug fix: sadece SAYI değil, İÇERİK değişti mi de bak.
+                    // (Admin bir ürünün resmini/fiyatını değiştirince sayı aynı kalır ama
+                    // DOM'daki kart eski URL'yi gösteriyordu — modal ise allProducts'tan
+                    // güncel URL'yi alıp yeni gösteriyordu. Tutarsızlık ortaya çıkıyordu.)
+                    const productSignature = (p) => [
+                        p.id,
+                        p.imageUrl || '',
+                        p.price || '',
+                        p.title || '',
+                        p.category || '',
+                        p.isOnSale ? '1' : '0',
+                        p.originalPrice || '',
+                        p.name_ru || '', p.name_en || '',
+                        p.desc_ru || '', p.desc_en || ''
+                    ].join('|');
+
+                    const cachedById = new Map(
+                        cachedProducts.map(p => [String(p.id), productSignature(p)])
+                    );
+                    const hasContentChanges =
+                        freshProducts.length !== cachedProducts.length ||
+                        freshProducts.some(fp => {
+                            const sig = cachedById.get(String(fp.id));
+                            return sig === undefined || sig !== productSignature(fp);
+                        });
+
+                    if (hasContentChanges) {
                         renderStorePage(storeId, window._currentActiveFilter || null, true);
                     }
                 } catch (err) {
@@ -3022,12 +3047,25 @@
         const modalImageBg = document.getElementById('modal-image-bg');
         const modalSkeleton = document.getElementById('modal-img-skeleton');
 
-        // ✅ GÜNCELLENDİ: Tıklanan ürünün ekrandaki mevcut resim kaynağını bul (Yeniden yüklemeyi önle)
-        let preloadedImageUrl = getOptimizedImageUrl(product.imageUrl); // Varsayılan CDN Linki
-        const existingImgEl = document.querySelector(`.product-card img[src*="${product.id}"]`) || document.querySelector(`.btn-favorite[data-id="${productId}"]`)?.closest('.product-card')?.querySelector('.product-img');
+        // ✅ Tıklanan ÜRÜNE ait kartı kesin olarak bul (substring eşleşmesi YAPMA — yanlış ürünü yakalıyordu).
+        // Aşağıdaki seçiciler hep data-id ile tam eşleşme kullanır.
+        let preloadedImageUrl = getOptimizedImageUrl(product.imageUrl); // Varsayılan CDN URL
+        const pidStr = String(productId);
+        const cssId = (window.CSS && CSS.escape) ? CSS.escape(pidStr) : pidStr.replace(/"/g, '\\"');
+
+        const existingImgEl =
+            // 1) Normal grid / arama: favori butonu data-id'den ürünün kartı
+            document.querySelector(`.btn-favorite[data-id="${cssId}"]`)?.closest('.product-card')?.querySelector('.product-img') ||
+            // 2) Popüler rail (HIT) kartı
+            document.querySelector(`.popular-card[data-product-id="${cssId}"] .popular-card-img`) ||
+            // 3) Sepet/cart-cart-button vb. yedek (yoksa boş)
+            null;
 
         if (existingImgEl && existingImgEl.src && existingImgEl.src.length > 100) {
-            preloadedImageUrl = existingImgEl.src;
+            // Fallback (transparent SVG) içerik olmasın
+            if (!existingImgEl.src.startsWith('data:image/svg+xml')) {
+                preloadedImageUrl = existingImgEl.src;
+            }
         }
 
         // ✅ Resmi ve skeleton'u ayarla

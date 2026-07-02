@@ -67,6 +67,19 @@ async function runMigrations() {
     ALTER TABLE stores
       ADD COLUMN IF NOT EXISTS category_order JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
+  // ✅ Türkçe (TR) dil desteği için yeni sütunlar
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS name_tr VARCHAR(255) DEFAULT '';
+  `);
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS desc_tr TEXT DEFAULT '';
+  `);
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS category_tr VARCHAR(255) DEFAULT '';
+  `);
 }
 
 async function query(text, params) {

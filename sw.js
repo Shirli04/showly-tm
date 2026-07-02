@@ -1,4 +1,4 @@
-const CACHE_NAME = 'showly-offline-v7';
+const CACHE_NAME = 'showly-offline-v8';
 const IMG_CACHE_NAME = 'showly-images-v1';
 
 const ASSETS_TO_CACHE = [

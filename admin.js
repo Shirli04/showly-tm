@@ -1568,16 +1568,22 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('product-name').value = product.title || '';
             document.getElementById('product-name-ru').value = product.name_ru || '';
             document.getElementById('product-name-en').value = product.name_en || '';
+            const productNameTrEl = document.getElementById('product-name-tr');
+            if (productNameTrEl) productNameTrEl.value = product.name_tr || '';
             document.getElementById('product-store').value = product.storeId || '';
             document.getElementById('product-price').value = product.price || ''; // ✅ DÜZELTME
             document.getElementById('product-discounted-price').value = product.originalPrice || ''; // ✅ DÜZELTME
             document.getElementById('product-description').value = product.description || '';
             document.getElementById('product-description-ru').value = product.desc_ru || '';
             document.getElementById('product-description-en').value = product.desc_en || '';
+            const productDescTrEl = document.getElementById('product-description-tr');
+            if (productDescTrEl) productDescTrEl.value = product.desc_tr || '';
             document.getElementById('product-material').value = product.material || '';
             document.getElementById('product-category').value = product.category || '';
             document.getElementById('product-category-ru').value = product.category_ru || '';
             document.getElementById('product-category-en').value = product.category_en || '';
+            const productCatTrEl = document.getElementById('product-category-tr');
+            if (productCatTrEl) productCatTrEl.value = product.category_tr || '';
 
             // Resim varsa, önizlemeyi göster
             if (product.imageUrl) {
@@ -1638,16 +1644,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const title = document.getElementById('product-name').value.trim();
             const nameRu = document.getElementById('product-name-ru').value.trim();
             const nameEn = document.getElementById('product-name-en').value.trim();
+            const nameTr = (document.getElementById('product-name-tr')?.value || '').trim();
             const storeId = document.getElementById('product-store').value;
             const newPrice = document.getElementById('product-price').value.trim(); // ✅ DÜZELTME
             const discountedPriceInput = document.getElementById('product-discounted-price')?.value.trim() || ''; // ✅ DÜZELTME
             const desc = document.getElementById('product-description').value.trim();
             const descRu = document.getElementById('product-description-ru').value.trim();
             const descEn = document.getElementById('product-description-en').value.trim();
+            const descTr = (document.getElementById('product-description-tr')?.value || '').trim();
             const material = document.getElementById('product-material').value.trim();
             const category = document.getElementById('product-category').value.trim();
             const categoryRu = document.getElementById('product-category-ru').value.trim();
             const categoryEn = document.getElementById('product-category-en').value.trim();
+            const categoryTr = (document.getElementById('product-category-tr')?.value || '').trim();
             const file = productImage.files[0];
 
             if (!title || !storeId || !newPrice) {
@@ -1697,14 +1706,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     title,
                     name_ru: nameRu,
                     name_en: nameEn,
+                    name_tr: nameTr,
                     price: newPrice,
                     description: desc,
                     desc_ru: descRu,
                     desc_en: descEn,
+                    desc_tr: descTr,
                     material,
                     category,
                     category_ru: categoryRu,
                     category_en: categoryEn,
+                    category_tr: categoryTr,
                     isOnSale,
                     originalPrice,
                     imageUrl
@@ -1717,14 +1729,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     title,
                     name_ru: nameRu,
                     name_en: nameEn,
+                    name_tr: nameTr,
                     price: newPrice,
                     description: desc,
                     desc_ru: descRu,
                     desc_en: descEn,
+                    desc_tr: descTr,
                     material,
                     category,
                     category_ru: categoryRu,
                     category_en: categoryEn,
+                    category_tr: categoryTr,
                     isOnSale,
                     originalPrice,
                     imageUrl
@@ -3491,6 +3506,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderReservationStores();
             renderBronStores();
             if (window.populateBulkDeleteStores) window.populateBulkDeleteStores();
+            if (window.populateExportStoresSelect) window.populateExportStoresSelect();
 
             if (loadingOverlay) loadingOverlay.style.display = 'none';
             startAutoRefresh();
@@ -3690,12 +3706,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     window.location.reload(); // Fallback
                 }
-                
+
                 // Input'u temizle
                 importProductsInput.value = '';
-                
+
             } catch (error) {
                 alert('Excel yüklenirken bir hata oluştu: ' + error.message);
+            }
+        });
+    }
+
+    // ✅ YENİ: Excel olarak ürünleri indir (Ayarlar > Excel indir)
+    const exportStoresSelect = document.getElementById('export-products-store-select');
+    const exportProductsBtn = document.getElementById('export-products-btn');
+
+    window.populateExportStoresSelect = function () {
+        if (!exportStoresSelect) return;
+        const stores = (typeof globalStores !== 'undefined' && globalStores) ? globalStores : [];
+        // Mevcut seçimi koru
+        const previous = exportStoresSelect.value;
+        exportStoresSelect.innerHTML = '<option value="">Ähli magazynlar</option>';
+        stores.forEach(store => {
+            const option = document.createElement('option');
+            option.value = store.id;
+            option.textContent = store.name;
+            exportStoresSelect.appendChild(option);
+        });
+        if (previous) exportStoresSelect.value = previous;
+    };
+
+    if (exportProductsBtn) {
+        exportProductsBtn.addEventListener('click', async () => {
+            const originalHtml = exportProductsBtn.innerHTML;
+            const storeId = exportStoresSelect ? exportStoresSelect.value : '';
+
+            try {
+                exportProductsBtn.disabled = true;
+                exportProductsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Taýýarlanýar...';
+
+                const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken') || '';
+                const url = storeId
+                    ? `/api/products/export-excel?storeId=${encodeURIComponent(storeId)}`
+                    : '/api/products/export-excel';
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                });
+
+                if (!response.ok) {
+                    let msg = `Server hatasy (${response.status})`;
+                    try {
+                        const errData = await response.json();
+                        msg = errData.message || msg;
+                    } catch (_) { /* body JSON değilse yut */ }
+                    throw new Error(msg);
+                }
+
+                // Blob → indirilebilir dosya
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+
+                // Server Content-Disposition'dan dosya adını al (yoksa fallback)
+                const cd = response.headers.get('Content-Disposition') || '';
+                const match = cd.match(/filename="([^"]+)"/);
+                a.download = match ? match[1] : `showly-products-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+
+            } catch (err) {
+                alert('Excel ýükläp alynyp bilinmedi: ' + (err.message || 'Näbelli säwlik'));
+            } finally {
+                exportProductsBtn.disabled = false;
+                exportProductsBtn.innerHTML = originalHtml;
             }
         });
     }

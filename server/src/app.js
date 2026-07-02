@@ -319,14 +319,17 @@ app.post('/api/products/import-excel', requireAuth, excelUpload.single('file'), 
           description: getField(row, 'Düşündiriş (TM)', 'Düşündiriş', 'Açıklama'),
           name_ru: getField(row, 'Haryt Ady (RU)', 'Haryt Ady (Ru)'),
           name_en: getField(row, 'Haryt Ady (EN)', 'Haryt Ady (En)'),
+          name_tr: getField(row, 'Haryt Ady (TR)', 'Haryt Ady (Tr)', 'Ürün Adı (TR)'),
           desc_ru: getField(row, 'Düşündiriş (RU)', 'Düşündiriş (Ru)'),
           desc_en: getField(row, 'Düşündiriş (EN)', 'Düşündiriş (En)'),
+          desc_tr: getField(row, 'Düşündiriş (TR)', 'Düşündiriş (Tr)', 'Açıklama (TR)'),
           price: `${normalPriceClean} TMT`,
           originalPrice: isOnSale ? `${discountedPrice} TMT` : '',
           isOnSale,
           category: getField(row, 'Kategoriýa (TM)', 'Kategoriýa', 'Kategori'),
           category_ru: getField(row, 'Kategoriýa (RU)', 'Kategoriýa (Ru)'),
           category_en: getField(row, 'Kategoriýa (EN)', 'Kategoriýa (En)'),
+          category_tr: getField(row, 'Kategoriýa (TR)', 'Kategoriýa (Tr)', 'Kategori (TR)'),
           material: getField(row, 'Material', 'Malzeme'),
           imageUrl: getField(row, 'Surat URL', 'Resim URL'),
         };
@@ -353,6 +356,106 @@ app.post('/api/batch', requireAuth, asyncHandler(async (req, res) => {
   await commitBatch(operations);
   res.json({ success: true });
 }));
+
+// ✅ Ürünleri Excel olarak indirme (Ayarlar > Excel indir)
+// Query: ?storeId=... veya boş → tüm mağazalar.
+// Yalnızca admin/superadmin veya "products" yetkisi olan kullanıcı.
+app.get('/api/products/export-excel',
+  requireAuth,
+  requireRoleOrPermission('products'),
+  asyncHandler(async (req, res) => {
+    const stores = await listResource('stores', {});
+    const storesById = new Map(stores.map((s) => [String(s.id), s]));
+
+    // Filtre: tek mağaza veya hepsi
+    const storeFilter = String(req.query.storeId || '').trim();
+    let products;
+    if (storeFilter) {
+      const store = storesById.get(storeFilter);
+      if (!store) throw new HttpError(404, 'Store not found');
+      products = await listResource('products', { whereField: 'storeId', whereValue: storeFilter });
+    } else {
+      products = await listResource('products', {});
+    }
+
+    // İzin: store_user sadece kendi mağazasının ürünlerini indirebilir
+    const user = req.user || {};
+    if (user.role !== 'superadmin' && user.role !== 'admin') {
+      const userStoreId = String(user.storeId || '').trim();
+      if (userStoreId) {
+        products = products.filter((p) => String(p.storeId) === userStoreId);
+      }
+    }
+
+    // İmport ile aynı format — round-trip mümkün olsun (aynı sütun isimleri)
+    const rows = products.map((p) => {
+      const store = storesById.get(String(p.storeId));
+      const priceValue = p.price == null ? '' : String(p.price);
+      const priceClean = priceValue.replace(' TMT', '').trim();
+      const originalPrice = p.originalPrice == null ? '' : String(p.originalPrice);
+      const originalClean = originalPrice.replace(' TMT', '').trim();
+      return {
+        'Haryt ID': p.id || '',
+        'Magazyn Ady': store ? store.name : '',
+        'Haryt Ady (TM)': p.title || '',
+        'Haryt Ady (RU)': p.name_ru || '',
+        'Haryt Ady (EN)': p.name_en || '',
+        'Haryt Ady (TR)': p.name_tr || '',
+        'Kategoriýa (TM)': p.category || '',
+        'Kategoriýa (RU)': p.category_ru || '',
+        'Kategoriýa (EN)': p.category_en || '',
+        'Kategoriýa (TR)': p.category_tr || '',
+        'Baha': priceClean,
+        'Arzanladyş Bahasy': p.isOnSale ? originalClean : '',
+        'Düşündiriş (TM)': p.description || '',
+        'Düşündiriş (RU)': p.desc_ru || '',
+        'Düşündiriş (EN)': p.desc_en || '',
+        'Düşündiriş (TR)': p.desc_tr || '',
+        'Material': p.material || '',
+        'Surat URL': p.imageUrl || ''
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: [
+        'Haryt ID', 'Magazyn Ady',
+        'Haryt Ady (TM)', 'Haryt Ady (RU)', 'Haryt Ady (EN)', 'Haryt Ady (TR)',
+        'Kategoriýa (TM)', 'Kategoriýa (RU)', 'Kategoriýa (EN)', 'Kategoriýa (TR)',
+        'Baha', 'Arzanladyş Bahasy',
+        'Düşündiriş (TM)', 'Düşündiriş (RU)', 'Düşündiriş (EN)', 'Düşündiriş (TR)',
+        'Material', 'Surat URL'
+      ]
+    });
+
+    // Sütun genişlikleri (görsel iyileştirme)
+    worksheet['!cols'] = [
+      { wch: 36 }, // ID
+      { wch: 24 }, // Magazyn
+      { wch: 28 }, { wch: 28 }, { wch: 28 }, { wch: 28 }, // Ad TM/RU/EN/TR
+      { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, // Kategori TM/RU/EN/TR
+      { wch: 12 }, { wch: 18 }, // Baha, Arzanladyş
+      { wch: 40 }, { wch: 40 }, { wch: 40 }, { wch: 40 }, // Açıklama TM/RU/EN/TR
+      { wch: 20 }, { wch: 60 } // Material, URL
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Harytlar');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Dosya adı: showly-products-<timestamp>.xlsx veya store-specific
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const scope = storeFilter && storesById.get(storeFilter)
+      ? String(storesById.get(storeFilter).slug || 'store')
+      : 'all';
+    const filename = `showly-products-${scope}-${dateStr}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  })
+);
 
 function permissionForResource(resource) {
   const map = {

@@ -16,7 +16,20 @@
       "Bash(node --check server/src/server.js)",
       "Bash(node --check server/src/middleware/error-handler.js)",
       "Bash(node --check server/src/config/env.js)",
-      "Bash(node --check ecosystem.config.js)"
+      "Bash(node --check ecosystem.config.js)",
+      "Bash(node --check server/src/services/repository.js)",
+      "Bash(node --check server/src/config/db.js)",
+      "Bash(node -e ' *)",
+      "Bash(grep -c \"\\\\$\" server/src/services/repository.js)",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('style.css','utf8'\\); const o=\\(c.match\\(/\\\\{/g\\)||[]\\).length; const cl=\\(c.match\\(/\\\\}/g\\)||[]\\).length; console.log\\('style.css {:',o,'/ }:',cl,\\(o===cl?'✓':'❌'\\)\\);\")",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('admin.css','utf8'\\); const o=\\(c.match\\(/\\\\{/g\\)||[]\\).length; const cl=\\(c.match\\(/\\\\}/g\\)||[]\\).length; console.log\\('admin.css {:',o,'/ }:',cl,\\(o===cl?'✓':'❌'\\)\\);\")",
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('index.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('index.html <div>:',o,'/ </div>:',cl\\);\")",
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('admin.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('admin.html <div>:',o,'/ </div>:',cl\\);\")",
+      "Bash(git stash *)",
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('index.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('BEFORE index.html <div>:',o,'/ </div>:',cl\\);\")",
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('admin.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('BEFORE admin.html <div>:',o,'/ </div>:',cl\\);\")",
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('index.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('AFTER  index.html <div>:',o,'/ </div>:',cl\\);\")",
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('admin.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('AFTER  admin.html <div>:',o,'/ </div>:',cl\\);\")"
     ]
   }
 }
