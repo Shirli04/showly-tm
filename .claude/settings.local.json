@@ -29,7 +29,8 @@
       "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('index.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('BEFORE index.html <div>:',o,'/ </div>:',cl\\);\")",
       "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('admin.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('BEFORE admin.html <div>:',o,'/ </div>:',cl\\);\")",
       "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('index.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('AFTER  index.html <div>:',o,'/ </div>:',cl\\);\")",
-      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('admin.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('AFTER  admin.html <div>:',o,'/ </div>:',cl\\);\")"
+      "Bash(node -e \"const h=require\\('fs'\\).readFileSync\\('admin.html','utf8'\\); const o=\\(h.match\\(/<div\\\\b/gi\\)||[]\\).length; const cl=\\(h.match\\(/<\\\\/div>/gi\\)||[]\\).length; console.log\\('AFTER  admin.html <div>:',o,'/ </div>:',cl\\);\")",
+      "Bash(grep -o \"site.\\\\{0,200\\\\}durdu\\\\|npm install.\\\\{0,300\\\\}\\\\|pm2 stop\\\\|systemctl stop\\\\|sunucu.\\\\{0,100\\\\}durdu\" \"C:/Users/Anonymous/.claude/projects/C--Users-Anonymous-Desktop-Showly-tm/c7a89640-9bc7-4def-a230-cbff39a80af0.jsonl\")"
     ]
   }
 }

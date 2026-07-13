@@ -208,15 +208,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const text = link.querySelector('span')?.textContent || link.textContent.trim();
             pageTitle.textContent = text;
 
-            // ✅ OPTİMİZASYON: Önce cache'i kullan, cache yoksa API'den çek
+            // ✅ OPTİMİZASYON: Lazy load — products'a ihtiyacı olan sekmelerde ensureProductsLoaded çağır.
             if (sectionId === 'stores') {
-                renderStoresTable(globalStores.length ? globalStores : null, globalProducts.length ? globalProducts : null);
+                if (globalProducts && globalProducts.length > 0) {
+                    renderStoresTable(globalStores, globalProducts);
+                } else {
+                    renderStoresTable(globalStores, null); // Ürünsüz render (sayı "-" olabilir)
+                    if (typeof window.ensureProductsLoaded === 'function') {
+                        window.ensureProductsLoaded().then(() => renderStoresTable(globalStores, globalProducts));
+                    }
+                }
             }
             if (sectionId === 'products') {
-                renderProductsTable(globalProducts.length ? globalProducts : null, globalStores.length ? globalStores : null);
+                window.showTableSkeleton('products-table-body', 6, 6);
+                if (typeof window.ensureProductsLoaded === 'function') {
+                    window.ensureProductsLoaded().then(() => {
+                        renderProductsTable(globalProducts, globalStores);
+                    });
+                } else {
+                    renderProductsTable(globalProducts.length ? globalProducts : null, globalStores.length ? globalStores : null);
+                }
             }
             if (sectionId === 'orders') {
-                renderOrdersTable(globalOrders.length ? globalOrders : null, globalProducts.length ? globalProducts : null, globalStores.length ? globalStores : null);
+                if (typeof window.ensureProductsLoaded === 'function') {
+                    window.ensureProductsLoaded().then(() => {
+                        renderOrdersTable(globalOrders, globalProducts, globalStores);
+                    });
+                } else {
+                    renderOrdersTable(globalOrders.length ? globalOrders : null, globalProducts.length ? globalProducts : null, globalStores.length ? globalStores : null);
+                }
             }
             if (sectionId === 'users') renderUsersTable();
             if (sectionId === 'categories') {
@@ -544,8 +564,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mağaza tablosunu güncelle
     const renderStoresTable = async (cachedStores, cachedProducts) => {
         // ✅ Önce globalCache'i kullan, yoksa API'den çek
-        const stores = cachedStores || globalStores.length ? (cachedStores || globalStores) : await window.showlyDB.getStores();
-        const allProducts = cachedProducts || globalProducts.length ? (cachedProducts || globalProducts) : (await window.db.collection('products').get()).docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const stores = (cachedStores && cachedStores.length) ? cachedStores : (globalStores.length ? globalStores : await window.showlyDB.getStores());
+        // ✅ LAZY: cachedProducts explicit null ise ürün sayısını "-" göster (henüz yüklenmemiş).
+        // Değilse cachedProducts veya globalProducts kullan.
+        const allProducts = (cachedProducts === null)
+            ? null
+            : ((cachedProducts && cachedProducts.length) ? cachedProducts : (globalProducts.length ? globalProducts : null));
         window.showTableSkeleton('stores-table-body', 5, 5); // Skeleton göster (veritabanına gitmeden önce)
 
         // Mağazaları tarihe göre sırala (En yeni en üstte)
@@ -557,7 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Tüm mağaza satırlarını oluştur (hızlı ve paralel)
         const rowsHTML = sortedStores.map(store => {
-            const storeProducts = allProducts.filter(p => p.storeId === store.id);
+            const storeProductsCount = allProducts ? allProducts.filter(p => p.storeId === store.id).length : null;
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td data-label="ID" class="store-id-cell"></td>
@@ -581,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
             storeLink.className = 'store-link';
             storeLink.textContent = `/${storeSlug}`;
             storeLinkCell.appendChild(storeLink);
-            row.querySelector('.store-products-count-cell').textContent = storeProducts.length;
+            row.querySelector('.store-products-count-cell').textContent = storeProductsCount === null ? '…' : storeProductsCount;
             return row;
         });
 
@@ -1607,17 +1631,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteProduct = (productId) => {
         if (confirm('Bu ürünü silmek istediğinizden emin misiniz?')) {
             window.showlyDB.deleteProduct(productId);
-            // ✅ Filtreleme durumunu kontrol et
-            const filterStoreSelect = document.getElementById('filter-store-select');
-            const filterCategorySelect = document.getElementById('filter-category-select');
-
-            if (filterStoreSelect && filterStoreSelect.value) {
-                // Filtreyi koru (await olmadığı için async yapmamız gerekebilir ama deleteProduct zaten async değil, ancak filterProducts async. Sorun olmaz, arka planda güncellenir)
-                filterProducts(filterStoreSelect.value, filterCategorySelect ? filterCategorySelect.value : null);
-            } else {
-                renderProductsTable();
+            // ✅ Optimistic: RAM'de sil, tabloyu API çağırmadan yenile (filtreler korunur)
+            try {
+                const idx = (globalProducts || []).findIndex(p => String(p.id) === String(productId));
+                if (idx >= 0) globalProducts.splice(idx, 1);
+                if (typeof window.applyProductFilters === 'function') {
+                    window.applyProductFilters();
+                }
+                updateDashboard(globalStores, globalProducts, globalOrders);
+            } catch (e) {
+                // Fallback: eski yol
+                const filterStoreSelect = document.getElementById('filter-store-select');
+                const filterCategorySelect = document.getElementById('filter-category-select');
+                if (filterStoreSelect && filterStoreSelect.value) {
+                    filterProducts(filterStoreSelect.value, filterCategorySelect ? filterCategorySelect.value : null);
+                } else {
+                    renderProductsTable();
+                }
+                updateDashboard();
             }
-            updateDashboard();
             showNotification('Ürün başarıyla silindi!');
         }
     };
@@ -1698,52 +1730,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Payload'ı bir kez hazırla (aynı obje hem UPDATE hem INSERT'e gider)
+            const productPayload = {
+                storeId,
+                title,
+                name_ru: nameRu,
+                name_en: nameEn,
+                name_tr: nameTr,
+                price: newPrice,
+                description: desc,
+                desc_ru: descRu,
+                desc_en: descEn,
+                desc_tr: descTr,
+                material,
+                category,
+                category_ru: categoryRu,
+                category_en: categoryEn,
+                category_tr: categoryTr,
+                isOnSale,
+                originalPrice,
+                imageUrl
+            };
+
+            let updatedProduct = null;
+
             // Düzenleme mi, yoksa yeni ekleme mi?
             if (editingProductId) {
                 // Mevcut ürünü güncelle
-                await window.db.collection('products').doc(editingProductId).update({
-                    storeId,
-                    title,
-                    name_ru: nameRu,
-                    name_en: nameEn,
-                    name_tr: nameTr,
-                    price: newPrice,
-                    description: desc,
-                    desc_ru: descRu,
-                    desc_en: descEn,
-                    desc_tr: descTr,
-                    material,
-                    category,
-                    category_ru: categoryRu,
-                    category_en: categoryEn,
-                    category_tr: categoryTr,
-                    isOnSale,
-                    originalPrice,
-                    imageUrl
-                });
+                await window.db.collection('products').doc(editingProductId).update(productPayload);
+                // ✅ Optimistic: güncellenen ürünün son halini biz oluştur (backend cevabı yerine)
+                const existing = (globalProducts || []).find(p => String(p.id) === String(editingProductId)) || {};
+                updatedProduct = { ...existing, ...productPayload, id: editingProductId };
                 showNotification('Ürün başarıyla güncellendi!');
             } else {
-                // Yeni ürün ekle
-                await window.addProductToAPI({
-                    storeId,
-                    title,
-                    name_ru: nameRu,
-                    name_en: nameEn,
-                    name_tr: nameTr,
-                    price: newPrice,
-                    description: desc,
-                    desc_ru: descRu,
-                    desc_en: descEn,
-                    desc_tr: descTr,
-                    material,
-                    category,
-                    category_ru: categoryRu,
-                    category_en: categoryEn,
-                    category_tr: categoryTr,
-                    isOnSale,
-                    originalPrice,
-                    imageUrl
-                });
+                // Yeni ürün ekle — addProductToAPI { id, ...product } döner
+                const created = await window.addProductToAPI(productPayload);
+                updatedProduct = created && created.id ? created : null;
                 showNotification('Ürün API\'e eklendi!');
             }
 
@@ -1751,21 +1773,26 @@ document.addEventListener('DOMContentLoaded', () => {
             closeAllModals();
             isSubmitting = false; // Kullanıcı hemen başka işlem yapabilsin
 
-            // ✅ Arka planda verileri güncelle (AWAIT YOK)
-            (async () => {
-                try {
-                    const filterStoreSelect = document.getElementById('filter-store-select');
-                    const filterCategorySelect = document.getElementById('filter-category-select');
-
-                    if (filterStoreSelect && filterStoreSelect.value) {
-                        await filterProducts(filterStoreSelect.value, filterCategorySelect ? filterCategorySelect.value : null, false); // false = Loading gösterme
+            // ✅ Optimistic update: globalProducts'ı RAM'de güncelle, tabloyu API çağırmadan yenile.
+            // Filtreler (mağaza+kategori) korunur, sadece etkilenen satır güncellenir.
+            try {
+                if (updatedProduct) {
+                    const idx = (globalProducts || []).findIndex(p => String(p.id) === String(updatedProduct.id));
+                    if (idx >= 0) {
+                        globalProducts[idx] = updatedProduct; // Güncelle
                     } else {
-                        renderProductsTable(); // Bu zaten loading göstermiyor
+                        globalProducts.push(updatedProduct); // Yeni ekleme
                     }
-                    updateDashboard();
-                } catch (e) {
                 }
-            })();
+                // RAM üstünde filtreleri uygula + tabloyu render et (API çağrısı yok)
+                if (typeof window.applyProductFilters === 'function') {
+                    window.applyProductFilters();
+                }
+                // Dashboard sadece sayaç — hızlı güncelleme
+                updateDashboard(globalStores, globalProducts, globalOrders);
+            } catch (e) {
+                // Sessiz — kullanıcı akışını kırmasın
+            }
 
         } catch (err) {
             showNotification('Ürün işlemi başarısız oldu!', false);
@@ -2000,6 +2027,94 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ✅ YENİ: Mevcut filtre değerlerini koruyarak globalProducts'tan RAM üstünde
+    // ürünleri süzüp tabloyu render eder. API çağrısı YAPMAZ.
+    // Kategori dropdown'unu günceller ama seçili değeri korur.
+    function renderProductsTableFromCache(products, storesMap) {
+        const tbody = document.getElementById('products-table-body');
+        if (!tbody) return;
+
+        if (!products || products.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px; color: #999;">
+                        <i class="fas fa-box-open" style="font-size: 48px; margin-bottom: 10px;"></i>
+                        <p>Bu filtrelerle ürün bulunamadı</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let htmlStr = '';
+        for (const product of products) {
+            const store = storesMap[product.storeId];
+            const storeName = store ? store.name : 'Mağaza Bulunamadı';
+            htmlStr += `
+                <tr>
+                    <td data-label="ID" class="product-id-cell">${product.id}</td>
+                    <td data-label="Haryt Ady" class="product-title-cell">${product.title || ''}</td>
+                    <td data-label="Magazyn" class="product-store-cell">${storeName}</td>
+                    <td data-label="Bahasy" class="product-price-cell">${product.price || ''}</td>
+                    <td data-label="Etmekler">
+                        <button class="btn-icon edit-product" data-id="${product.id}"><i class="fas fa-edit"></i></button>
+                        <button class="btn-icon danger delete-product" data-id="${product.id}"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `;
+        }
+        tbody.innerHTML = htmlStr;
+        attachProductEventListeners();
+    }
+
+    // ✅ YENİ: Mevcut mağaza + kategori filtrelerine göre globalProducts'ı süzüp render eder.
+    // Kategori dropdown'unu yeniler ama SEÇİLİ değeri korur (kaydet sonrası filtre kaybolmasın).
+    // API çağrısı yok — hepsi RAM'den.
+    window.applyProductFilters = function () {
+        const filterStoreSelect = document.getElementById('filter-store-select');
+        const filterCategorySelect = document.getElementById('filter-category-select');
+        if (!filterStoreSelect) return;
+
+        const selectedStoreId = filterStoreSelect.value;
+        const currentCategoryValue = filterCategorySelect ? filterCategorySelect.value : '';
+
+        const storesMap = {};
+        (globalStores || []).forEach(s => { storesMap[s.id] = s; });
+
+        // 1) Ürünleri süz
+        let filtered = globalProducts || [];
+        if (selectedStoreId) {
+            filtered = filtered.filter(p => p.storeId === selectedStoreId);
+        }
+
+        // 2) Kategori dropdown'unu güncelle (seçili değeri koru)
+        if (filterCategorySelect) {
+            if (selectedStoreId) {
+                const categories = [...new Set(filtered.map(p => p.category).filter(Boolean))].sort();
+                filterCategorySelect.innerHTML = '<option value="">Tüm Kategoriler</option>';
+                categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    if (cat === currentCategoryValue) option.selected = true;
+                    filterCategorySelect.appendChild(option);
+                });
+                filterCategorySelect.disabled = categories.length === 0;
+            } else {
+                filterCategorySelect.innerHTML = '<option value="">Tüm Kategoriler</option>';
+                filterCategorySelect.disabled = true;
+            }
+        }
+
+        // 3) Kategori filtresini uygula (koruna seçim)
+        if (currentCategoryValue && selectedStoreId) {
+            filtered = filtered.filter(p => p.category === currentCategoryValue);
+        }
+
+        // 4) Render
+        renderProductsTableFromCache(filtered, storesMap);
+    };
+
     // ✅ Mağaza ve kategori filtreleme sistemi
     (function initProductFilters() {
         const filterStoreSelect = document.getElementById('filter-store-select');
@@ -2010,51 +2125,23 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Mağaza seçilince
+        // ✅ OPTİMİZE: Mağaza seçilince RAM'den filtreler (API çağrısı yok).
+        // Products henüz yüklenmediyse önce lazy load et.
         filterStoreSelect.addEventListener('change', async (e) => {
-            const selectedStoreId = e.target.value;
-
-            // Kategori filtresini sıfırla
-            filterCategorySelect.innerHTML = '<option value="">Tüm Kategoriler</option>';
-            filterCategorySelect.disabled = true;
-
-            if (selectedStoreId) {
-                // ✅ Seçilen mağazanın ürünlerini göster
-                await filterAndDisplayProducts(selectedStoreId, null);
-
-                // ✅ Kategorileri yükle
-                try {
-                    const productsSnapshot = await window.db.collection('products')
-                        .where('storeId', '==', selectedStoreId)
-                        .get();
-
-                    const products = productsSnapshot.docs.map(doc => doc.data());
-                    const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
-
-                    if (categories.length > 0) {
-                        filterCategorySelect.disabled = false;
-                        categories.forEach(cat => {
-                            const option = document.createElement('option');
-                            option.value = cat;
-                            option.textContent = cat;
-                            filterCategorySelect.appendChild(option);
-                        });
-                    }
-                } catch (error) {
-                }
-            } else {
-                // ✅ Tüm ürünleri göster
-                await renderProductsTable();
+            if (typeof window.ensureProductsLoaded === 'function') {
+                await window.ensureProductsLoaded();
+            }
+            // Kategori filter değerini sıfırla (yeni mağaza için)
+            if (filterCategorySelect) filterCategorySelect.value = '';
+            if (typeof window.applyProductFilters === 'function') {
+                window.applyProductFilters();
             }
         });
 
-        // Kategori seçilince
-        filterCategorySelect.addEventListener('change', async (e) => {
-            const selectedStoreId = filterStoreSelect.value;
-            const selectedCategory = e.target.value;
-
-            if (selectedStoreId) {
-                await filterAndDisplayProducts(selectedStoreId, selectedCategory);
+        // ✅ Kategori seçilince RAM'den filtreler
+        filterCategorySelect.addEventListener('change', async () => {
+            if (typeof window.applyProductFilters === 'function') {
+                window.applyProductFilters();
             }
         });
     })();
@@ -3400,13 +3487,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Ürün ekle (Firestore)
     window.addProductToAPI = async function (product) {
+        // ✅ BUG FIX: Tüm dil alanları (RU/EN/TR) ve diğer alanlar da gönderilsin.
+        // Eskiden sadece TM alanları gönderiliyordu, yeni ürünlerin çok dilli alanları boş kalıyordu.
         const doc = await window.db.collection('products').add({
             storeId: product.storeId,
             title: product.title,
+            name_ru: product.name_ru || '',
+            name_en: product.name_en || '',
+            name_tr: product.name_tr || '',
             price: product.price,
             description: product.description || '',
+            desc_ru: product.desc_ru || '',
+            desc_en: product.desc_en || '',
+            desc_tr: product.desc_tr || '',
             material: product.material || '',
             category: product.category || '',
+            category_ru: product.category_ru || '',
+            category_en: product.category_en || '',
+            category_tr: product.category_tr || '',
             isOnSale: product.isOnSale || false,
             originalPrice: product.originalPrice || '',
             imageUrl: product.imageUrl || '',
@@ -3444,63 +3542,115 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sayfa yüklendiğinde bekleyen siparişleri kontrol et
     processPendingOrders();
 
+    // ✅ YENİ: Ürünleri "gerektiğinde" yükleyen helper (lazy loading).
+    // İlk yüklemede TÜM ürünler ÇEKİLMİYOR. Products/Orders/Stores sekmelerine girildiğinde
+    // veya bir filtre kullanıldığında bu çağrılır. Bir kere yüklendikten sonra RAM'de tutulur.
+    let _productsLoadPromise = null;
+    window.ensureProductsLoaded = async function () {
+        if (globalProducts && globalProducts.length > 0) return globalProducts;
+        if (_productsLoadPromise) return _productsLoadPromise;
+        _productsLoadPromise = (async () => {
+            try {
+                const snap = await window.db.collection('products').get();
+                globalProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                return globalProducts;
+            } catch (e) {
+                return globalProducts || [];
+            } finally {
+                _productsLoadPromise = null;
+            }
+        })();
+        return _productsLoadPromise;
+    };
+
+    // ✅ YENİ: Dashboard sayaçlarını /api/counts'tan hızlıca çeker (tüm ürünleri çekmeye gerek yok).
+    async function fetchCounts() {
+        try {
+            const res = await fetch('/api/counts', { cache: 'no-store' });
+            if (!res.ok) throw new Error('counts failed');
+            return await res.json(); // { stores, products, orders }
+        } catch (e) {
+            return null;
+        }
+    }
+
     // ✅ Tüm verileri yükleyen fonksiyon - Güvenli ve Kararlı Veri Akışı
+    // OPTİMİZASYON: Products çekilmiyor artık. Dashboard sayaçları /api/counts'tan gelir.
+    // Products, sekmelerde gerekince "ensureProductsLoaded()" ile yüklenir.
     const loadAllData = async () => {
         const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay) loadingOverlay.style.display = 'none'; // Tam ekran loading iptal, skeleton kullanılacak
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
 
         try {
             window.showDashboardSkeleton();
             window.showTableSkeleton('stores-table-body', 5, 5);
-            window.showTableSkeleton('products-table-body', 6, 6);
             window.showTableSkeleton('orders-table-body', 9, 5);
 
             const fetchPrimary = async () => {
+                // ✅ Products YOK — lazy loaded. Orders limit 200 (dashboard için son 200 yeterli).
                 const results = await Promise.allSettled([
                     window.db.collection('stores').get(),
-                    window.db.collection('products').get(),
-                    window.db.collection('orders').orderBy('date', 'desc').get()
+                    window.db.collection('orders').orderBy('date', 'desc').limit(200).get(),
+                    fetchCounts()
                 ]);
-
                 const stores = results[0].status === 'fulfilled' ? results[0].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
-                const products = results[1].status === 'fulfilled' ? results[1].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
-                const orders = results[2].status === 'fulfilled' ? results[2].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
-
-                if (results[2].status === 'rejected') {
-                }
-
-                return { stores, products, orders, source: 'Local API' };
+                const orders = results[1].status === 'fulfilled' ? results[1].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
+                const counts = results[2].status === 'fulfilled' ? results[2].value : null;
+                return { stores, orders, counts };
             };
 
             let result;
             try {
                 result = await fetchPrimary();
             } catch (err) {
-                result = { stores: [], products: [], orders: [], source: 'Error' };
+                result = { stores: [], orders: [], counts: null };
             }
 
             globalStores = result.stores;
-            globalProducts = result.products;
             globalOrders = result.orders;
+            // ✅ globalProducts başlangıçta boş — sekme açılınca doldurulur
 
             window.hideDashboardSkeleton();
-            updateDashboard(globalStores, globalProducts, globalOrders);
+
+            // Dashboard sayaçları — counts endpoint'ten (tüm ürünler çekilmeden)
+            if (result.counts) {
+                const totalStoresEl = document.getElementById('total-stores');
+                const totalProductsEl = document.getElementById('total-products');
+                const totalOrdersEl = document.getElementById('total-orders');
+                if (totalStoresEl) totalStoresEl.textContent = result.counts.stores;
+                if (totalProductsEl) totalProductsEl.textContent = result.counts.products;
+                if (totalOrdersEl) totalOrdersEl.textContent = result.counts.orders;
+                // Grafikler için orders yeterli, products'a gerek yok
+                if (typeof updateCharts === 'function') {
+                    updateCharts(globalStores, [], globalOrders);
+                }
+            } else {
+                updateDashboard(globalStores, [], globalOrders); // fallback
+            }
 
             // Aktif sekmeyi güncelle
-
             const activeSection = document.querySelector('.content-section.active');
             const sectionId = activeSection ? activeSection.id : 'stores';
 
-            if (sectionId === 'stores') renderStoresTable(globalStores, globalProducts);
-            if (sectionId === 'products') renderProductsTable(globalProducts, globalStores);
-            if (sectionId === 'orders') renderOrdersTable(globalOrders, globalProducts, globalStores);
+            if (sectionId === 'stores') {
+                // Ürün sayısı için products lazım — lazy load et
+                window.ensureProductsLoaded().then(() => renderStoresTable(globalStores, globalProducts));
+            }
+            if (sectionId === 'products') {
+                window.showTableSkeleton('products-table-body', 6, 6);
+                window.ensureProductsLoaded().then(() => renderProductsTable(globalProducts, globalStores));
+            }
+            if (sectionId === 'orders') {
+                // Orders sekmesinde ürün adları gerekli — lazy load
+                window.ensureProductsLoaded().then(() => renderOrdersTable(globalOrders, globalProducts, globalStores));
+            }
             if (sectionId === 'users' && currentUser.role === 'superadmin') renderUsersTable();
             if (sectionId === 'categories') {
                 renderParentCategoriesTable();
                 renderSubcategoriesTable();
             }
 
-            // Dropdownları doldur
+            // Dropdownları doldur (products'a bağımlı olanlar sekmeye girdiğinde dolar)
             populateStoreSelect();
             populateStoreFilter();
             renderReservationStores();
@@ -3793,33 +3943,52 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- OTOMATİK YENİLEME FONKSİYONU (Optimize Edilmiş) ---
+// OPTİMİZASYON: Products otomatik yenilenmiyor artık (3500-4000 ürün her 5 dk'da çekmek yavaş).
+// Sadece stores + orders (limit 200) + counts endpoint yenilenir.
+// Products sadece kullanıcı ürün sekmesine girdiğinde veya bir işlem yaptığında güncellenir.
 function startAutoRefresh() {
     const refreshInterval = 5 * 60 * 1000; // 5 dakika
 
     setInterval(async () => {
         try {
-            // ✅ Sadece globalCache'i yenile, tablo render etme (UI'yı bloklamaz)
-            const [storesSnap, productsSnap, ordersSnap] = await Promise.all([
+            const [storesSnap, ordersSnap, countsRes] = await Promise.all([
                 window.db.collection('stores').get().catch(() => ({ docs: [] })),
-                window.db.collection('products').get().catch(() => ({ docs: [] })),
-                window.db.collection('orders').orderBy('date', 'desc').get().catch(() => ({ docs: [] }))
+                window.db.collection('orders').orderBy('date', 'desc').limit(200).get().catch(() => ({ docs: [] })),
+                fetch('/api/counts', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
             ]);
 
-            // Global cache'i gizlice güncelle
+            // Global cache güncelle (products dokunulmuyor)
             if (storesSnap.docs.length) globalStores = storesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            if (productsSnap.docs.length) globalProducts = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             if (ordersSnap.docs.length) globalOrders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // ✅ Sadece aktif sekmeyi yenile (loading göstermeden)
+            // Aktif sekmeyi yenile (loading göstermeden)
             const activeSection = document.querySelector('.content-section.active');
             if (activeSection) {
                 const sectionId = activeSection.id;
-                if (sectionId === 'stores') renderStoresTable(globalStores, globalProducts);
-                else if (sectionId === 'products') renderProductsTable(globalProducts, globalStores);
-                else if (sectionId === 'orders') renderOrdersTable(globalOrders, globalProducts, globalStores);
+                if (sectionId === 'stores') {
+                    // Products cache'te varsa kullan, yoksa "-" ile render
+                    if (typeof renderStoresTable === 'function') {
+                        renderStoresTable(globalStores, globalProducts && globalProducts.length ? globalProducts : null);
+                    }
+                } else if (sectionId === 'products' && globalProducts && globalProducts.length) {
+                    if (typeof renderProductsTable === 'function') renderProductsTable(globalProducts, globalStores);
+                } else if (sectionId === 'orders') {
+                    if (typeof renderOrdersTable === 'function') renderOrdersTable(globalOrders, globalProducts, globalStores);
+                }
             }
 
-            if (typeof updateDashboard === 'function') updateDashboard(globalStores, globalProducts, globalOrders);
+            // Dashboard sayaçları — counts endpoint'ten
+            if (countsRes) {
+                const totalStoresEl = document.getElementById('total-stores');
+                const totalProductsEl = document.getElementById('total-products');
+                const totalOrdersEl = document.getElementById('total-orders');
+                if (totalStoresEl) totalStoresEl.textContent = countsRes.stores;
+                if (totalProductsEl) totalProductsEl.textContent = countsRes.products;
+                if (totalOrdersEl) totalOrdersEl.textContent = countsRes.orders;
+                if (typeof updateCharts === 'function') {
+                    updateCharts(globalStores, globalProducts || [], globalOrders);
+                }
+            }
             if (typeof renderBronTable === 'function') renderBronTable();
 
         } catch (error) {

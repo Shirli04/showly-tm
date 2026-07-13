@@ -95,6 +95,27 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
+// ✅ Hafif "counts" endpoint — dashboard sayaçları için (admin panelde ilk yükleme hızı için).
+// Tüm ürünleri çekmeye gerek kalmadan sadece toplam sayı döndürür.
+// Auth gerekmez (dashboard herkes için, hassas veri yok).
+app.get('/api/counts', asyncHandler(async (req, res) => {
+  const { query } = require('./config/db');
+  try {
+    const results = await Promise.all([
+      query('SELECT COUNT(*)::int AS c FROM stores'),
+      query('SELECT COUNT(*)::int AS c FROM products'),
+      query('SELECT COUNT(*)::int AS c FROM orders')
+    ]);
+    res.json({
+      stores: results[0].rows[0]?.c || 0,
+      products: results[1].rows[0]?.c || 0,
+      orders: results[2].rows[0]?.c || 0
+    });
+  } catch (err) {
+    res.json({ stores: 0, products: 0, orders: 0 });
+  }
+}));
+
 // ✅ Login brute-force koruması (in-memory rate limiter)
 // IP başına 5 dakika içinde 5 yanlış deneme → 15 dakika engel
 const LOGIN_WINDOW_MS = 5 * 60 * 1000;    // 5 dk pencere
