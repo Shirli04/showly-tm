@@ -208,35 +208,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const text = link.querySelector('span')?.textContent || link.textContent.trim();
             pageTitle.textContent = text;
 
-            // ✅ OPTİMİZASYON: Lazy load — products'a ihtiyacı olan sekmelerde ensureProductsLoaded çağır.
+            // ✅ OPTİMİZASYON: Lazy load — stores + products'ı garantili yüklet, sonra render et.
             if (sectionId === 'stores') {
-                if (globalProducts && globalProducts.length > 0) {
-                    renderStoresTable(globalStores, globalProducts);
-                } else {
-                    renderStoresTable(globalStores, null); // Ürünsüz render (sayı "-" olabilir)
+                (async () => {
+                    if (typeof window.ensureStoresLoaded === 'function') await window.ensureStoresLoaded();
+                    renderStoresTable(globalStores, null); // Önce mağazalar (ürün sayısı "…")
                     if (typeof window.ensureProductsLoaded === 'function') {
-                        window.ensureProductsLoaded().then(() => renderStoresTable(globalStores, globalProducts));
+                        await window.ensureProductsLoaded();
+                        renderStoresTable(globalStores, globalProducts); // Sonra ürün sayıları
                     }
-                }
+                })();
             }
             if (sectionId === 'products') {
                 window.showTableSkeleton('products-table-body', 6, 6);
-                if (typeof window.ensureProductsLoaded === 'function') {
-                    window.ensureProductsLoaded().then(() => {
-                        renderProductsTable(globalProducts, globalStores);
-                    });
-                } else {
-                    renderProductsTable(globalProducts.length ? globalProducts : null, globalStores.length ? globalStores : null);
-                }
+                (async () => {
+                    // Stores'un yüklenmiş olması ÇOK önemli — yoksa "Mağaza Bulunamadı" olur
+                    if (typeof window.ensureStoresLoaded === 'function') await window.ensureStoresLoaded();
+                    if (typeof window.ensureProductsLoaded === 'function') await window.ensureProductsLoaded();
+                    renderProductsTable(globalProducts, globalStores);
+                })();
             }
             if (sectionId === 'orders') {
-                if (typeof window.ensureProductsLoaded === 'function') {
-                    window.ensureProductsLoaded().then(() => {
-                        renderOrdersTable(globalOrders, globalProducts, globalStores);
-                    });
-                } else {
-                    renderOrdersTable(globalOrders.length ? globalOrders : null, globalProducts.length ? globalProducts : null, globalStores.length ? globalStores : null);
-                }
+                (async () => {
+                    if (typeof window.ensureStoresLoaded === 'function') await window.ensureStoresLoaded();
+                    if (typeof window.ensureProductsLoaded === 'function') await window.ensureProductsLoaded();
+                    renderOrdersTable(globalOrders, globalProducts, globalStores);
+                })();
             }
             if (sectionId === 'users') renderUsersTable();
             if (sectionId === 'categories') {
@@ -563,14 +560,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Mağaza tablosunu güncelle
     const renderStoresTable = async (cachedStores, cachedProducts) => {
-        // ✅ Önce globalCache'i kullan, yoksa API'den çek
-        const stores = (cachedStores && cachedStores.length) ? cachedStores : (globalStores.length ? globalStores : await window.showlyDB.getStores());
+        window.showTableSkeleton('stores-table-body', 5, 5);
+        // ✅ FIX: API'den çekilen stores globalStores'a da yansıtılsın (dashboard sayaçları için önemli)
+        let stores = (cachedStores && cachedStores.length) ? cachedStores : (globalStores && globalStores.length ? globalStores : null);
+        if (!stores) {
+            try {
+                stores = await window.showlyDB.getStores();
+                if (stores && stores.length) globalStores = stores; // ✅ Global cache dolur
+            } catch (_) {
+                stores = [];
+            }
+        }
         // ✅ LAZY: cachedProducts explicit null ise ürün sayısını "-" göster (henüz yüklenmemiş).
-        // Değilse cachedProducts veya globalProducts kullan.
         const allProducts = (cachedProducts === null)
             ? null
-            : ((cachedProducts && cachedProducts.length) ? cachedProducts : (globalProducts.length ? globalProducts : null));
-        window.showTableSkeleton('stores-table-body', 5, 5); // Skeleton göster (veritabanına gitmeden önce)
+            : ((cachedProducts && cachedProducts.length) ? cachedProducts : (globalProducts && globalProducts.length ? globalProducts : null));
 
         // Mağazaları tarihe göre sırala (En yeni en üstte)
         const sortedStores = [...stores].sort((a, b) => {
@@ -1506,53 +1510,42 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Ürün tablosunu güncelle
+    // ✅ FIX + PAGINATION: renderProductsTable temiz mantık.
+    // - Products: parametre → globalProducts → API'den (last resort)
+    // - Stores: parametre → globalStores → API'den (last resort)
+    // - storesMap her zaman doğru dolar
+    // - Render kısmı applyProductFilters + renderProductsTableFromCache'e devrediliyor (pagination için)
     async function renderProductsTable(cachedProducts, cachedStores) {
-        window.showTableSkeleton('products-table-body', 6, 6); // Skeleton göster
+        window.showTableSkeleton('products-table-body', 6, 6);
         try {
-            // ✅ Önce globalCache'i kullan, yoksa API'den çek
-            let products = cachedProducts || (globalProducts.length ? globalProducts : null);
-            let storesMap = {};
-
-            if (!products || !cachedStores) {
-                if (!products) {
-                    const productsSnapshot = await window.db.collection('products').get();
-                    products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                }
-                if (!cachedStores && !globalStores.length) {
-                    const storesSnapshot = await window.db.collection('stores').get();
-                    storesSnapshot.docs.forEach(doc => { storesMap[doc.id] = { id: doc.id, ...doc.data() }; });
+            // Products
+            let products = (cachedProducts && cachedProducts.length) ? cachedProducts : (globalProducts && globalProducts.length ? globalProducts : null);
+            if (!products) {
+                if (typeof window.ensureProductsLoaded === 'function') {
+                    products = await window.ensureProductsLoaded();
                 } else {
-                    (cachedStores || globalStores).forEach(store => { storesMap[store.id] = store; });
+                    const snap = await window.db.collection('products').get();
+                    products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    globalProducts = products;
                 }
+            }
+
+            // Stores
+            let stores = (cachedStores && cachedStores.length) ? cachedStores : (globalStores && globalStores.length ? globalStores : null);
+            if (!stores) {
+                const snap = await window.db.collection('stores').get();
+                stores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                globalStores = stores;
+            }
+
+            // ✅ Filter'lar aktifse onlara saygı göster
+            if (typeof window.applyProductFilters === 'function') {
+                window.applyProductFilters();
             } else {
-                cachedStores.forEach(store => {
-                    storesMap[store.id] = store;
-                });
+                const storesMap = {};
+                (stores || []).forEach(s => { storesMap[s.id] = s; });
+                renderProductsTableFromCache(products || [], storesMap);
             }
-
-            // ✅ Ürünleri işle (innerHTML ile 100x daha hızlı)
-            let htmlStr = '';
-            for (const product of products) {
-                const store = storesMap[product.storeId];
-                const storeName = store ? store.name : 'Mağaza Bulunamadı';
-
-                htmlStr += `
-                    <tr>
-                        <td data-label="ID" class="product-id-cell">${product.id}</td>
-                        
-                        <td data-label="Haryt Ady" class="product-title-cell">${product.title || ''}</td>
-                        <td data-label="Magazyn" class="product-store-cell">${storeName}</td>
-                        <td data-label="Bahasy" class="product-price-cell">${product.price || ''}</td>
-                        <td data-label="Etmekler">
-                            <button class="btn-icon edit-product" data-id="${product.id}"><i class="fas fa-edit"></i></button>
-                            <button class="btn-icon danger delete-product" data-id="${product.id}"><i class="fas fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `;
-            }
-            productsTableBody.innerHTML = htmlStr;
-
-            attachProductEventListeners();
         } catch (error) {
             showNotification('Ürünler yüklenemedi!', false);
         }
@@ -1960,27 +1953,55 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Dashboard güncelle - Verileri parametre olarak alabilir
+    // ✅ FIX: Sayaçları updateCharts'tan ÖNCE set et (chart hatası sayaçları düşürmesin).
+    // fetchCounts başarısızsa RAM'deki array'lere bak.
     const updateDashboard = async (cachedStores, cachedProducts, cachedOrders) => {
+        let storesCount, productsCount, ordersCount;
+
+        // 1) Öncelik: counts endpoint (backend hazırsa)
         try {
-            const storesCount = cachedStores ? cachedStores.length : (await window.db.collection('stores').get()).size;
-            const productsCount = cachedProducts ? cachedProducts.length : (await window.db.collection('products').get()).size;
-            const ordersCount = cachedOrders ? cachedOrders.length : (await window.db.collection('orders').get()).size;
-
-            // Sayıları güncelle
-            document.getElementById('total-stores').textContent = storesCount;
-            document.getElementById('total-products').textContent = productsCount;
-            document.getElementById('total-orders').textContent = ordersCount;
-
-            // ✅ GRAFİKLERİ GÜNCELLE
-            if (typeof updateCharts === 'function') {
-                updateCharts(cachedStores, cachedProducts, cachedOrders);
-            } else {
+            const res = await fetch('/api/counts', { cache: 'no-store' });
+            if (res.ok) {
+                const c = await res.json();
+                storesCount = c.stores;
+                productsCount = c.products;
+                ordersCount = c.orders;
             }
-        } catch (error) {
-            document.getElementById('total-stores').textContent = '0';
-            document.getElementById('total-products').textContent = '0';
-            document.getElementById('total-orders').textContent = '0';
+        } catch (_) { /* endpoint yoksa fallback */ }
+
+        // 2) Fallback: parametrelerden veya globalArrays'ten
+        if (storesCount == null) {
+            const s = (cachedStores && cachedStores.length) ? cachedStores : globalStores;
+            storesCount = s ? s.length : 0;
         }
+        if (ordersCount == null) {
+            const o = (cachedOrders && cachedOrders.length) ? cachedOrders : globalOrders;
+            ordersCount = o ? o.length : 0;
+        }
+        if (productsCount == null) {
+            const p = (cachedProducts && cachedProducts.length) ? cachedProducts : globalProducts;
+            productsCount = (p && p.length) ? p.length : '…';
+        }
+
+        // ✅ Sayaçları ÖNCE set et (chart hatası bunları düşürmesin)
+        try {
+            const totalStoresEl = document.getElementById('total-stores');
+            const totalProductsEl = document.getElementById('total-products');
+            const totalOrdersEl = document.getElementById('total-orders');
+            if (totalStoresEl) totalStoresEl.textContent = storesCount;
+            if (totalProductsEl) totalProductsEl.textContent = productsCount;
+            if (totalOrdersEl) totalOrdersEl.textContent = ordersCount;
+        } catch (_) { }
+
+        // ✅ Grafikleri ayrı try'da (hata dashboard'u bozmasın)
+        try {
+            if (typeof updateCharts === 'function') {
+                const stArr = (cachedStores && cachedStores.length) ? cachedStores : globalStores;
+                const prArr = (cachedProducts && cachedProducts.length) ? cachedProducts : (globalProducts || []);
+                const orArr = (cachedOrders && cachedOrders.length) ? cachedOrders : globalOrders;
+                updateCharts(stArr, prArr, orArr);
+            }
+        } catch (_) { }
     };
     // Mağaza seçimini doldur
     async function populateStoreSelect() {
@@ -2027,12 +2048,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ✅ Pagination state
+    let _productsPage = 1;
+    const _productsPageSize = 100; // Her sayfa 100 ürün — 3500+ ürünle donma önlenir
+
     // ✅ YENİ: Mevcut filtre değerlerini koruyarak globalProducts'tan RAM üstünde
-    // ürünleri süzüp tabloyu render eder. API çağrısı YAPMAZ.
-    // Kategori dropdown'unu günceller ama seçili değeri korur.
+    // ürünleri süzüp tabloyu render eder + PAGINATION uygular. API çağrısı YAPMAZ.
     function renderProductsTableFromCache(products, storesMap) {
         const tbody = document.getElementById('products-table-body');
         if (!tbody) return;
+
+        // ✅ Güvenlik: storesMap boşsa globalStores'tan tekrar doldur (Mağaza Bulunamadı sorununu önle)
+        if (!storesMap || Object.keys(storesMap).length === 0) {
+            storesMap = {};
+            (globalStores || []).forEach(s => { storesMap[s.id] = s; });
+        }
+
+        // Eski pagination footer'ı temizle
+        const oldPagination = document.getElementById('products-pagination');
+        if (oldPagination) oldPagination.remove();
 
         if (!products || products.length === 0) {
             tbody.innerHTML = `
@@ -2046,16 +2080,27 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // ✅ Pagination hesapla
+        const total = products.length;
+        const totalPages = Math.max(1, Math.ceil(total / _productsPageSize));
+        if (_productsPage > totalPages) _productsPage = totalPages;
+        if (_productsPage < 1) _productsPage = 1;
+        const startIdx = (_productsPage - 1) * _productsPageSize;
+        const pageProducts = products.slice(startIdx, startIdx + _productsPageSize);
+
+        // ✅ Sadece o sayfayı render et (max 100 satır — donma yok)
         let htmlStr = '';
-        for (const product of products) {
+        for (const product of pageProducts) {
             const store = storesMap[product.storeId];
             const storeName = store ? store.name : 'Mağaza Bulunamadı';
+            const title = String(product.title || '').replace(/</g, '&lt;');
+            const price = String(product.price || '').replace(/</g, '&lt;');
             htmlStr += `
                 <tr>
                     <td data-label="ID" class="product-id-cell">${product.id}</td>
-                    <td data-label="Haryt Ady" class="product-title-cell">${product.title || ''}</td>
+                    <td data-label="Haryt Ady" class="product-title-cell">${title}</td>
                     <td data-label="Magazyn" class="product-store-cell">${storeName}</td>
-                    <td data-label="Bahasy" class="product-price-cell">${product.price || ''}</td>
+                    <td data-label="Bahasy" class="product-price-cell">${price}</td>
                     <td data-label="Etmekler">
                         <button class="btn-icon edit-product" data-id="${product.id}"><i class="fas fa-edit"></i></button>
                         <button class="btn-icon danger delete-product" data-id="${product.id}"><i class="fas fa-trash"></i></button>
@@ -2065,7 +2110,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         tbody.innerHTML = htmlStr;
         attachProductEventListeners();
+
+        // ✅ Pagination footer ekle
+        const paginationEl = document.createElement('div');
+        paginationEl.id = 'products-pagination';
+        paginationEl.style.cssText = 'display:flex; justify-content:center; align-items:center; gap:12px; padding:16px; flex-wrap:wrap; font-size:14px;';
+        paginationEl.innerHTML = `
+            <button class="btn-secondary" id="products-first-page" ${_productsPage <= 1 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''} title="İlk sayfa"><i class="fas fa-angle-double-left"></i></button>
+            <button class="btn-secondary" id="products-prev-page" ${_productsPage <= 1 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''} title="Önceki sayfa"><i class="fas fa-angle-left"></i></button>
+            <span style="font-weight:600;">Sahypa <b>${_productsPage}</b> / ${totalPages}</span>
+            <span style="color:#666;">(Jemi ${total} haryt)</span>
+            <button class="btn-secondary" id="products-next-page" ${_productsPage >= totalPages ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''} title="Sonraki sayfa"><i class="fas fa-angle-right"></i></button>
+            <button class="btn-secondary" id="products-last-page" ${_productsPage >= totalPages ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''} title="Son sayfa"><i class="fas fa-angle-double-right"></i></button>
+        `;
+        // Tablonun altına ekle (tbody'nin parent'ının parent'ı = table wrapper)
+        const tableContainer = tbody.closest('.table-container') || tbody.parentElement.parentElement;
+        if (tableContainer && tableContainer.parentElement) {
+            tableContainer.parentElement.insertBefore(paginationEl, tableContainer.nextSibling);
+        }
+
+        // Pagination buton event'leri
+        const goToPage = (page) => {
+            _productsPage = page;
+            if (typeof window.applyProductFilters === 'function') {
+                window.applyProductFilters();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        };
+        document.getElementById('products-first-page')?.addEventListener('click', () => goToPage(1));
+        document.getElementById('products-prev-page')?.addEventListener('click', () => goToPage(_productsPage - 1));
+        document.getElementById('products-next-page')?.addEventListener('click', () => goToPage(_productsPage + 1));
+        document.getElementById('products-last-page')?.addEventListener('click', () => goToPage(totalPages));
     }
+
+    // ✅ Filter değişince pagination sıfırla (window'da açık — filter listener'larından erişim için)
+    window._resetProductsPage = function () { _productsPage = 1; };
 
     // ✅ YENİ: Mevcut mağaza + kategori filtrelerine göre globalProducts'ı süzüp render eder.
     // Kategori dropdown'unu yeniler ama SEÇİLİ değeri korur (kaydet sonrası filtre kaybolmasın).
@@ -2133,6 +2212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Kategori filter değerini sıfırla (yeni mağaza için)
             if (filterCategorySelect) filterCategorySelect.value = '';
+            if (typeof window._resetProductsPage === 'function') window._resetProductsPage();
             if (typeof window.applyProductFilters === 'function') {
                 window.applyProductFilters();
             }
@@ -2140,6 +2220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ✅ Kategori seçilince RAM'den filtreler
         filterCategorySelect.addEventListener('change', async () => {
+            if (typeof window._resetProductsPage === 'function') window._resetProductsPage();
             if (typeof window.applyProductFilters === 'function') {
                 window.applyProductFilters();
             }
@@ -3541,6 +3622,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sayfa yüklendiğinde bekleyen siparişleri kontrol et
     processPendingOrders();
+
+    // ✅ YENİ: Stores'u garantili yükleyen helper (race condition önler).
+    let _storesLoadPromise = null;
+    window.ensureStoresLoaded = async function () {
+        if (globalStores && globalStores.length > 0) return globalStores;
+        if (_storesLoadPromise) return _storesLoadPromise;
+        _storesLoadPromise = (async () => {
+            try {
+                const snap = await window.db.collection('stores').get();
+                globalStores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                return globalStores;
+            } catch (e) {
+                return globalStores || [];
+            } finally {
+                _storesLoadPromise = null;
+            }
+        })();
+        return _storesLoadPromise;
+    };
 
     // ✅ YENİ: Ürünleri "gerektiğinde" yükleyen helper (lazy loading).
     // İlk yüklemede TÜM ürünler ÇEKİLMİYOR. Products/Orders/Stores sekmelerine girildiğinde
