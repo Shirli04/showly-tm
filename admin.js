@@ -3687,10 +3687,12 @@ document.addEventListener('DOMContentLoaded', () => {
             window.showTableSkeleton('orders-table-body', 9, 5);
 
             const fetchPrimary = async () => {
-                // ✅ Products YOK — lazy loaded. Orders limit 200 (dashboard için son 200 yeterli).
+                // ✅ FIX: Firebase compat layer'ında .limit() yok — kullanmıyoruz.
+                // Orders tümü çekilir (siparişler zaten dashboard için gerekli).
+                // Products lazy — sekmeye girildiğinde yüklenir.
                 const results = await Promise.allSettled([
                     window.db.collection('stores').get(),
-                    window.db.collection('orders').orderBy('date', 'desc').limit(200).get(),
+                    window.db.collection('orders').orderBy('date', 'desc').get(),
                     fetchCounts()
                 ]);
                 const stores = results[0].status === 'fulfilled' ? results[0].value.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
@@ -3712,7 +3714,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             window.hideDashboardSkeleton();
 
-            // Dashboard sayaçları — counts endpoint'ten (tüm ürünler çekilmeden)
+            // Dashboard sayaçları — counts endpoint'ten hızlıca (tüm ürünler çekilmeden)
             if (result.counts) {
                 const totalStoresEl = document.getElementById('total-stores');
                 const totalProductsEl = document.getElementById('total-products');
@@ -3720,12 +3722,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (totalStoresEl) totalStoresEl.textContent = result.counts.stores;
                 if (totalProductsEl) totalProductsEl.textContent = result.counts.products;
                 if (totalOrdersEl) totalOrdersEl.textContent = result.counts.orders;
-                // Grafikler için orders yeterli, products'a gerek yok
+                // Grafikleri önce mevcut verilerle çiz (products=[] iken Harytlar grafiği düz olur)
                 if (typeof updateCharts === 'function') {
-                    updateCharts(globalStores, [], globalOrders);
+                    updateCharts(globalStores, globalProducts || [], globalOrders);
                 }
             } else {
-                updateDashboard(globalStores, [], globalOrders); // fallback
+                updateDashboard(globalStores, globalProducts || [], globalOrders); // fallback
+            }
+
+            // ✅ Arka planda ürünleri yükle ve grafiği güncelle (dashboard'da Harytlar grafiği doğru gösterilsin).
+            // Bu await edilmez — dashboard hemen açılır, grafikler saniyeler içinde güncellenir.
+            if (typeof window.ensureProductsLoaded === 'function') {
+                window.ensureProductsLoaded().then(() => {
+                    if (typeof updateCharts === 'function') {
+                        try { updateCharts(globalStores, globalProducts, globalOrders); } catch (_) {}
+                    }
+                }).catch(() => {});
             }
 
             // Aktif sekmeyi güncelle
@@ -4053,7 +4065,8 @@ function startAutoRefresh() {
         try {
             const [storesSnap, ordersSnap, countsRes] = await Promise.all([
                 window.db.collection('stores').get().catch(() => ({ docs: [] })),
-                window.db.collection('orders').orderBy('date', 'desc').limit(200).get().catch(() => ({ docs: [] })),
+                // ✅ FIX: .limit() metodu compat layer'da yok — kullanmıyoruz
+                window.db.collection('orders').orderBy('date', 'desc').get().catch(() => ({ docs: [] })),
                 fetch('/api/counts', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null)
             ]);
 
