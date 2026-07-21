@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kafeler — Yerel Kurulumlar</title>
+  <link rel="icon" href="/assets/logo.png">
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
+  <script>
+    // Session guard — admin.html ile aynı pattern
+    (function () {
+      const rawUser = sessionStorage.getItem('adminUser');
+      const rawToken = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken');
+      if (!rawUser || !rawToken) {
+        window.location.replace('/login');
+      }
+    })();
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f4f6f8; color: #1a2432;
+    }
+    header {
+      background: #1e293b; color: #fff;
+      padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    header .actions a {
+      color: #cbd5e1; text-decoration: none; margin-right: 16px; font-size: 14px;
+    }
+    header .actions a:hover { color: #fff; }
+    main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+    }
+    .toolbar button {
+      background: #2b7a4f; color: #fff; border: none; padding: 10px 16px;
+      border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+    }
+    .toolbar button:hover { background: #236640; }
+    .toolbar .refresh { background: #64748b; }
+    .toolbar .refresh:hover { background: #475569; }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: #fff; border-radius: 8px; padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      border-left: 4px solid #cbd5e1;
+      cursor: pointer;
+      transition: transform .1s;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+    .card.status-online { border-left-color: #16a34a; }
+    .card.status-stale { border-left-color: #f59e0b; }
+    .card.status-offline { border-left-color: #dc2626; }
+    .card.status-never { border-left-color: #94a3b8; }
+    .card h3 { margin: 0 0 4px; font-size: 16px; }
+    .card .store { color: #64748b; font-size: 13px; margin-bottom: 12px; }
+    .card .row {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: #475569; padding: 3px 0;
+    }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+    }
+    .badge.online { background: #dcfce7; color: #16a34a; }
+    .badge.stale { background: #fef3c7; color: #b45309; }
+    .badge.offline { background: #fee2e2; color: #b91c1c; }
+    .badge.never { background: #e2e8f0; color: #475569; }
+    .empty {
+      background: #fff; border-radius: 8px; padding: 60px 20px; text-align: center;
+      color: #64748b;
+    }
+    .empty i { font-size: 48px; color: #cbd5e1; display: block; margin-bottom: 12px; }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,.65); z-index: 1000;
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 8px; max-width: 640px; width: 100%;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { margin: 0; font-size: 18px; }
+    .modal-header button {
+      background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;
+    }
+    .modal-body { padding: 20px; }
+    .modal-body label {
+      display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; color: #334155;
+    }
+    .modal-body input, .modal-body select, .modal-body textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+      font-size: 14px; margin-bottom: 14px; font-family: inherit;
+    }
+    .modal-footer {
+      padding: 12px 20px; border-top: 1px solid #e2e8f0;
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .modal-footer button {
+      padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px;
+    }
+    .btn-primary { background: #2b7a4f; color: #fff; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-danger { background: #dc2626; color: #fff; }
+
+    .token-box {
+      background: #f8fafc; border: 1px dashed #94a3b8; padding: 12px;
+      border-radius: 6px; font-family: 'Courier New', monospace; font-size: 13px;
+      word-break: break-all; margin: 10px 0;
+    }
+    .warning {
+      background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 12px;
+      border-radius: 4px; color: #92400e; font-size: 13px; margin: 10px 0;
+    }
+    .detail-section { margin-top: 20px; }
+    .detail-section h4 {
+      margin: 0 0 8px; font-size: 14px; color: #334155;
+      border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;
+    }
+    .cmd-list, .hb-list { list-style: none; padding: 0; margin: 0; }
+    .cmd-list li, .hb-list li {
+      padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 13px;
+    }
+    .cmd-list li:last-child, .hb-list li:last-child { border-bottom: none; }
+    .cmd-status {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      font-size: 11px; font-weight: 600;
+    }
+    .cmd-status.pending { background: #e2e8f0; color: #475569; }
+    .cmd-status.dispatched { background: #dbeafe; color: #1e40af; }
+    .cmd-status.success { background: #dcfce7; color: #16a34a; }
+    .cmd-status.failed { background: #fee2e2; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><i class="fas fa-store-alt"></i> Kafeler — Yerel Kurulumlar</h1>
+    <div class="actions">
+      <a href="/admin"><i class="fas fa-arrow-left"></i> Admin Panel</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <div>
+        <button id="btn-refresh" class="refresh"><i class="fas fa-sync"></i> Yenile</button>
+      </div>
+      <div>
+        <button id="btn-new"><i class="fas fa-plus"></i> Yeni Kafe Kurulumu</button>
+      </div>
+    </div>
+
+    <div id="cafes-grid" class="grid"></div>
+    <div id="empty-state" class="empty" style="display:none;">
+      <i class="fas fa-inbox"></i>
+      Henüz kafe kurulumu yok. Yukarıdan "Yeni Kafe Kurulumu" ile başla.
+    </div>
+  </main>
+
+  <!-- Create modal -->
+  <div class="modal-backdrop" id="modal-create">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Yeni Kafe Kurulumu</h2>
+        <button data-close="modal-create">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label>Mağaza</label>
+        <select id="new-store"><option value="">Yükleniyor...</option></select>
+        <label>Etiket (bu laptopun adı, örn. "Aşgabat şube — mutfak laptopu")</label>
+        <input id="new-label" type="text" placeholder="Etiket" />
+        <div id="new-result" style="display:none;">
+          <div class="warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Bu tokeni şimdi kaydet.</strong> Bir daha gösterilmeyecek. Kaybedersen yeni token oluşturman gerekir.
+          </div>
+          <div class="token-box" id="new-token"></div>
+          <button class="btn-secondary" onclick="copyToken('new-token')"><i class="far fa-copy"></i> Kopyala</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close="modal-create">Kapat</button>
+        <button class="btn-primary" id="btn-create-submit">Oluştur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail modal -->
+  <div class="modal-backdrop" id="modal-detail">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="detail-title">Detay</h2>
+        <button data-close="modal-detail">&times;</button>
+      </div>
+      <div class="modal-body" id="detail-body">Yükleniyor...</div>
+      <div class="modal-footer">
+        <button class="btn-danger" id="btn-delete">Sil</button>
+        <button class="btn-secondary" id="btn-regenerate">Token Yenile</button>
+        <button class="btn-primary" id="btn-send-command">Komut Gönder</button>
+        <button class="btn-secondary" data-close="modal-detail">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = sessionStorage.getItem('adminToken') || localStorage.getItem('adminToken');
+    let selectedCafeId = null;
+
+    function authFetch(url, opts = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+      headers.Authorization = 'Bearer ' + token;
+      return fetch(url, { ...opts, headers });
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    function fmtAge(mins) {
+      if (mins == null) return 'Hiç';
+      if (mins < 1) return 'Az önce';
+      if (mins < 60) return mins + ' dk önce';
+      const h = Math.floor(mins / 60);
+      if (h < 24) return h + ' saat önce';
+      return Math.floor(h / 24) + ' gün önce';
+    }
+
+    async function loadCafes() {
+      const r = await authFetch('/api/admin/cafes');
+      if (!r.ok) { alert('Kafeler yüklenemedi'); return; }
+      const { cafes } = await r.json();
+      const grid = document.getElementById('cafes-grid');
+      const empty = document.getElementById('empty-state');
+      if (!cafes.length) {
+        grid.innerHTML = ''; empty.style.display = 'block'; return;
+      }
+      empty.style.display = 'none';
+      grid.innerHTML = cafes.map((c) => `
+        <div class="card status-${c.status}" onclick="openDetail('${c.id}')">
+          <h3>${escape(c.label)}</h3>
+          <div class="store">${escape(c.store_name || '—')} <span style="opacity:.6">/${escape(c.store_slug || '')}</span></div>
+          <div class="row"><span>Durum</span><span class="badge ${c.status}">${statusLabel(c.status)}</span></div>
+          <div class="row"><span>Son heartbeat</span><span>${fmtAge(c.ageMinutes)}</span></div>
+          <div class="row"><span>Son sync</span><span>${fmtDate(c.last_sync_at)}</span></div>
+          <div class="row"><span>Sürüm</span><span>${escape(c.version || '—')}</span></div>
+          <div class="row"><span>Tablet / Garson</span><span>${c.tablets_count} / ${c.waiters_count}</span></div>
+        </div>
+      `).join('');
+    }
+
+    function statusLabel(s) {
+      return { online: 'Canlı', stale: 'Bekliyor', offline: 'Çevrim dışı', never: 'Hiç bağlanmadı' }[s] || s;
+    }
+
+    function escape(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function copyToken(id) {
+      const text = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(text).then(() => alert('Kopyalandı'));
+    }
+
+    async function loadStoresForCreate() {
+      const r = await authFetch('/api/stores');
+      const stores = await r.json();
+      document.getElementById('new-store').innerHTML =
+        '<option value="">Mağaza seç...</option>' +
+        stores.map((s) => `<option value="${s.id}">${escape(s.name)} (${escape(s.slug)})</option>`).join('');
+    }
+
+    async function openDetail(id) {
+      selectedCafeId = id;
+      const modal = document.getElementById('modal-detail');
+      const body = document.getElementById('detail-body');
+      body.innerHTML = 'Yükleniyor...';
+      modal.classList.add('open');
+
+      const r = await authFetch('/api/admin/cafes/' + id);
+      if (!r.ok) { body.innerHTML = 'Yüklenemedi'; return; }
+      const { cafe, recentHeartbeats, recentCommands } = await r.json();
+
+      document.getElementById('detail-title').textContent = cafe.label;
+      body.innerHTML = `
+        <div class="row"><strong>Mağaza:</strong> ${escape(cafe.store_name || '—')}</div>
+        <div class="row"><strong>Sürüm:</strong> ${escape(cafe.version || '—')}</div>
+        <div class="row"><strong>Son heartbeat:</strong> ${fmtDate(cafe.last_heartbeat_at)}</div>
+        <div class="row"><strong>Son sync:</strong> ${fmtDate(cafe.last_sync_at)}</div>
+        <div class="row"><strong>Son IP:</strong> ${escape(cafe.last_seen_ip || '—')}</div>
+        <div class="row"><strong>Aktif:</strong> ${cafe.is_active ? 'Evet' : 'Hayır'}</div>
+        <div class="row"><strong>Token prefix:</strong> <code>${escape(cafe.api_token_prefix)}</code></div>
+
+        <div class="detail-section">
+          <h4>Son komutlar</h4>
+          ${recentCommands.length ? `<ul class="cmd-list">${recentCommands.map((c) => `
+            <li>
+              <div><strong>${escape(c.kind)}</strong> <span class="cmd-status ${c.status}">${c.status}</span></div>
+              <div style="color:#64748b;font-size:12px;">${fmtDate(c.created_at)}${c.acked_at ? ' → ack ' + fmtDate(c.acked_at) : ''}</div>
+            </li>
+          `).join('')}</ul>` : '<div style="color:#94a3b8;">Henüz komut yok.</div>'}
+        </div>
+
+        <div class="detail-section">
+          <h4>Son heartbeat'ler</h4>
+          ${recentHeartbeats.length ? `<ul class="hb-list">${recentHeartbeats.slice(0, 5).map((h) => `
+            <li>
+              <div style="color:#64748b;font-size:12px;">${fmtDate(h.at)}</div>
+              <pre style="margin:4px 0;font-size:11px;color:#334155;">${escape(JSON.stringify(h.snapshot, null, 2))}</pre>
+            </li>
+          `).join('')}</ul>` : '<div style="color:#94a3b8;">Henüz heartbeat yok.</div>'}
+        </div>
+      `;
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', loadCafes);
+
+    document.getElementById('btn-new').addEventListener('click', async () => {
+      document.getElementById('new-label').value = '';
+      document.getElementById('new-store').value = '';
+      document.getElementById('new-result').style.display = 'none';
+      document.getElementById('modal-create').classList.add('open');
+      await loadStoresForCreate();
+    });
+
+    document.getElementById('btn-create-submit').addEventListener('click', async () => {
+      const storeId = document.getElementById('new-store').value;
+      const label = document.getElementById('new-label').value.trim();
+      if (!storeId || !label) { alert('Mağaza ve etiket zorunlu.'); return; }
+
+      const r = await authFetch('/api/admin/cafes', {
+        method: 'POST',
+        body: JSON.stringify({ storeId, label })
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert('Oluşturulamadı: ' + (err.message || r.status));
+        return;
+      }
+      const { apiToken } = await r.json();
+      document.getElementById('new-token').textContent = apiToken;
+      document.getElementById('new-result').style.display = 'block';
+      await loadCafes();
+    });
+
+    document.getElementById('btn-delete').addEventListener('click', async () => {
+      if (!selectedCafeId) return;
+      if (!confirm('Bu kurulumu silmek istediğine emin misin? Laptop artık bağlanamayacak.')) return;
+      const r = await authFetch('/api/admin/cafes/' + selectedCafeId, { method: 'DELETE' });
+      if (r.ok) {
+        document.getElementById('modal-detail').classList.remove('open');
+        await loadCafes();
+      } else {
+        alert('Silinemedi');
+      }
+    });
+
+    document.getElementById('btn-regenerate').addEventListener('click', async () => {
+      if (!selectedCafeId) return;
+      if (!confirm('Yeni token oluşturulsun mu? Eski token derhal geçersiz olur.')) return;
+      const r = await authFetch('/api/admin/cafes/' + selectedCafeId + '/regenerate-token', {
+        method: 'POST'
+      });
+      if (!r.ok) { alert('Token yenilenemedi'); return; }
+      const { apiToken } = await r.json();
+      prompt('Yeni token (şimdi kopyala, bir daha gösterilmez):', apiToken);
+    });
+
+    document.getElementById('btn-send-command').addEventListener('click', async () => {
+      if (!selectedCafeId) return;
+      const kind = prompt('Komut türü (reload-menu, restart, update-version, ...)');
+      if (!kind) return;
+      const payloadStr = prompt('Payload JSON (boş bırakılabilir):', '{}');
+      let payload = {};
+      try { payload = JSON.parse(payloadStr || '{}'); } catch { alert('Geçersiz JSON'); return; }
+      const r = await authFetch('/api/admin/cafes/' + selectedCafeId + '/commands', {
+        method: 'POST',
+        body: JSON.stringify({ kind, payload })
+      });
+      if (r.ok) {
+        alert('Komut kuyruğa eklendi.');
+        openDetail(selectedCafeId);
+      } else {
+        alert('Komut eklenemedi');
+      }
+    });
+
+    document.querySelectorAll('[data-close]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById(btn.dataset.close).classList.remove('open');
+      });
+    });
+
+    loadCafes();
+    setInterval(loadCafes, 30000); // 30 saniyede bir otomatik yenile
+  </script>
+</body>
+</html>

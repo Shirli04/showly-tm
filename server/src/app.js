@@ -95,6 +95,12 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
+// Kafe LAN sistemi router'ları
+// - cafe-sync: laptop kurulumları için (X-Cafe-Token auth)
+// - cafe-admin: senin admin panelin için (JWT auth)
+app.use('/api/cafe-sync', require('./services/cafe-sync'));
+app.use('/api/admin', require('./services/cafe-admin'));
+
 // ✅ Hafif "counts" endpoint — dashboard sayaçları için (admin panelde ilk yükleme hızı için).
 // Tüm ürünleri çekmeye gerek kalmadan sadece toplam sayı döndürür.
 // Auth gerekmez (dashboard herkes için, hassas veri yok).
@@ -866,6 +872,11 @@ app.get(['/login', '/login.html'], (req, res) => {
 
 app.get(['/admin', '/admin.html'], (req, res) => {
   res.sendFile(path.join(env.rootDir, 'admin.html'));
+});
+
+// Kafeler durum panosu — mevcut admin.html'e dokunmadan ayrı sayfa.
+app.get(['/admin/cafes', '/admin-cafes.html'], (req, res) => {
+  res.sendFile(path.join(env.rootDir, 'admin-cafes.html'));
 });
 
 app.get(['/sw.js'], (req, res) => {
