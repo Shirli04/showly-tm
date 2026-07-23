@@ -80,9 +80,32 @@ function normalizeStore(row) {
     tables: ensureArray(row.tables),
     views: row.views || 0,
     categoryOrder: ensureArray(row.category_order),
+    categoryUpsell: ensureObject(row.category_upsell),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function ensureObject(value) {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) || {}; } catch (e) { return {}; }
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  return {};
+}
+
+function normalizeCategoryUpsellPayload(value) {
+  const raw = ensureObject(value);
+  const result = {};
+  Object.keys(raw).forEach((key) => {
+    const k = String(key || '').trim();
+    if (!k) return;
+    const arr = Array.isArray(raw[key]) ? raw[key] : [];
+    const cleaned = arr.map(v => String(v || '').trim()).filter(Boolean);
+    if (cleaned.length > 0) result[k] = Array.from(new Set(cleaned));
+  });
+  return result;
 }
 
 function normalizeProduct(row) {
@@ -109,7 +132,7 @@ function normalizeProduct(row) {
     imagePublicId: row.image_public_id || '',
     variants: ensureArray(row.variants),
     views: row.views || 0,
-    pairingFor: ensureArray(row.pairing_for),
+    orderCount: Number(row.order_count || 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -438,6 +461,7 @@ async function upsertStore(payload, id) {
     stoplistProductIds: ensureArray(source.stoplistProductIds),
     tables: ensureArray(source.tables),
     categoryOrder: ensureArray(source.categoryOrder),
+    categoryUpsell: normalizeCategoryUpsellPayload(source.categoryUpsell),
     viewsIncrement: data.views && data.views.__increment ? Number(data.views.__increment) : 0,
     viewsValue: typeof data.views === 'number' ? data.views : (current ? current.views : null)
   };
@@ -454,7 +478,7 @@ async function upsertStore(payload, id) {
       featured_products_enabled, featured_product_ids,
       ready_meal_products_enabled, ready_meal_product_ids,
       stoplist_products_enabled, stoplist_product_ids,
-      tables, views, category_order
+      tables, views, category_order, category_upsell
     ) VALUES (
       COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
       $7, $8, $9, $10, $11, $12,
@@ -462,7 +486,7 @@ async function upsertStore(payload, id) {
       $16, $17::jsonb,
       $18, $19::jsonb,
       $20, $21::jsonb,
-      $22::jsonb, COALESCE($23, 0), $25::jsonb
+      $22::jsonb, COALESCE($23, 0), $25::jsonb, $26::jsonb
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
@@ -487,6 +511,7 @@ async function upsertStore(payload, id) {
       stoplist_product_ids = EXCLUDED.stoplist_product_ids,
       tables = EXCLUDED.tables,
       category_order = EXCLUDED.category_order,
+      category_upsell = EXCLUDED.category_upsell,
       views = CASE
         WHEN $24 <> 0 THEN stores.views + $24
         WHEN $23 IS NOT NULL THEN $23
@@ -519,7 +544,8 @@ async function upsertStore(payload, id) {
     JSON.stringify(normalized.tables),
     normalized.viewsValue,
     normalized.viewsIncrement,
-    JSON.stringify(normalized.categoryOrder)
+    JSON.stringify(normalized.categoryOrder),
+    JSON.stringify(normalized.categoryUpsell)
   ]);
 
   return normalizeStore(result.rows[0]);
@@ -539,13 +565,13 @@ async function upsertProduct(payload, id) {
       description, desc_ru, desc_en, desc_tr, material,
       category, category_ru, category_en, category_tr,
       price, discounted_price, is_on_sale,
-      image_url, image_public_id, variants, views, pairing_for
+      image_url, image_public_id, variants, views
     ) VALUES (
       COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
       $7, $8, $9, $10, $11,
       $12, $13, $14, $15,
       $16, $17, $18,
-      $19, $20, $21::jsonb, COALESCE($22, 0), $23::jsonb
+      $19, $20, $21::jsonb, COALESCE($22, 0)
     )
     ON CONFLICT (id) DO UPDATE SET
       store_id = EXCLUDED.store_id,
@@ -568,7 +594,6 @@ async function upsertProduct(payload, id) {
       image_url = EXCLUDED.image_url,
       image_public_id = EXCLUDED.image_public_id,
       variants = EXCLUDED.variants,
-      pairing_for = EXCLUDED.pairing_for,
       views = COALESCE($22, products.views),
       updated_at = NOW()
     RETURNING *
@@ -594,8 +619,7 @@ async function upsertProduct(payload, id) {
     source.imageUrl || '',
     source.imagePublicId || '',
     JSON.stringify(ensureArray(source.variants)),
-    typeof data.views === 'number' ? data.views : (current ? current.views : null),
-    JSON.stringify(ensureArray(source.pairingFor))
+    typeof data.views === 'number' ? data.views : (current ? current.views : null)
   ]);
 
   return normalizeProduct(result.rows[0]);
@@ -609,6 +633,7 @@ async function upsertOrder(payload, id) {
   const items = ensureArray(source.items);
   const totalAmount = parseMoney(source.total || source.totalPrice) || 0;
   const totalLabel = source.total || formatMoney(totalAmount);
+  const isNewOrder = !current;
 
   const row = await query(`
     INSERT INTO orders (
@@ -658,6 +683,18 @@ async function upsertOrder(payload, id) {
     source.guestCount || null,
     source.tableNumber || null
   ]);
+
+  // Yeni order oluşturulduğunda ürünlerin order_count'unu artır (upsell sıralaması için)
+  if (isNewOrder) {
+    for (const item of items) {
+      const productId = item && (item.id || item.productId);
+      const qty = Number(item && item.quantity) || 1;
+      if (!productId) continue;
+      try {
+        await query('UPDATE products SET order_count = COALESCE(order_count, 0) + $1 WHERE id = $2', [qty, productId]);
+      } catch (e) { /* ignore — order still succeeds even if product not found */ }
+    }
+  }
 
   return normalizeOrder(row.rows[0]);
 }

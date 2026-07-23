@@ -736,6 +736,27 @@ app.patch('/api/stores/:id/category-order', requireAuth, asyncHandler(async (req
   );
   res.json({ success: true, categoryOrder: order });
 }));
+
+// Kategori upsell map'ini doğrudan kaydeden endpoint (mobil için)
+app.patch('/api/stores/:id/category-upsell', requireAuth, asyncHandler(async (req, res) => {
+  const raw = req.body && req.body.categoryUpsell;
+  const normalized = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    Object.keys(raw).forEach((key) => {
+      const k = String(key || '').trim();
+      if (!k) return;
+      const arr = Array.isArray(raw[key]) ? raw[key] : [];
+      const cleaned = arr.map(v => String(v || '').trim()).filter(Boolean);
+      if (cleaned.length > 0) normalized[k] = Array.from(new Set(cleaned));
+    });
+  }
+  const { query } = require('./config/db');
+  await query(
+    `UPDATE stores SET category_upsell = $1::jsonb, updated_at = NOW() WHERE id = $2`,
+    [JSON.stringify(normalized), req.params.id]
+  );
+  res.json({ success: true, categoryUpsell: normalized });
+}));
 createCrudRoutes('/api/users', 'users');
 createCrudRoutes('/api/categories/parents', 'parentCategories');
 createCrudRoutes('/api/categories/subcategories', 'subcategories');

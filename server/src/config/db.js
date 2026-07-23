@@ -67,6 +67,16 @@ async function runMigrations() {
     ALTER TABLE stores
       ADD COLUMN IF NOT EXISTS category_order JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
+  // ✅ Kategori upsell — kategori→kategoriler map (stores.categoryUpsell)
+  await pool.query(`
+    ALTER TABLE stores
+      ADD COLUMN IF NOT EXISTS category_upsell JSONB NOT NULL DEFAULT '{}'::jsonb;
+  `);
+  // ✅ Ürün sipariş sayacı — upsell'de en çok siparişleneni öne çıkarmak için
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS order_count INTEGER NOT NULL DEFAULT 0;
+  `);
   // ✅ Türkçe (TR) dil desteği için yeni sütunlar
   await pool.query(`
     ALTER TABLE products
@@ -80,12 +90,6 @@ async function runMigrations() {
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS category_tr VARCHAR(255) DEFAULT '';
   `);
-  // ✅ Upsell — bu ürün hangi kategorilerde yan olarak önerilsin?
-  await pool.query(`
-    ALTER TABLE products
-      ADD COLUMN IF NOT EXISTS pairing_for JSONB NOT NULL DEFAULT '[]'::jsonb;
-  `);
-
   // ✅ Kafe LAN sistemi tabloları (idempotent — mevcut deployment'a ekleme).
   // Sadece schema.sql güncellemek yetmez, çünkü prodüksiyon veritabanı zaten kurulu.
   await pool.query(`

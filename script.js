@@ -1974,19 +1974,24 @@
 
         const storeId = currentProduct.storeId;
         const currentCategory = (currentProduct.category || '').trim();
+        const store = allStores.find(s => String(s.id) === String(storeId));
+        const categoryUpsell = (store && store.categoryUpsell && typeof store.categoryUpsell === 'object') ? store.categoryUpsell : {};
 
-        // 1) Öncelik: pairingFor ile eşleşen ürünler (kullanıcının el ile ayarladığı)
+        // 1) Öncelik: mağazanın categoryUpsell map'i (kategori→kategoriler)
+        //    Bu kategorideki ürün açıldığında, hedef kategorilerdeki ürünlerden en çok siparişleri göster
         let pool = [];
-        if (currentCategory) {
+        const targetCategories = (currentCategory && Array.isArray(categoryUpsell[currentCategory]))
+            ? categoryUpsell[currentCategory].map(c => String(c).trim()).filter(Boolean)
+            : [];
+        if (targetCategories.length > 0) {
             pool = allProducts.filter(p =>
                 p.storeId === storeId &&
                 String(p.id) !== String(currentProduct.id) &&
-                Array.isArray(p.pairingFor) &&
-                p.pairingFor.includes(currentCategory)
+                targetCategories.includes((p.category || '').trim())
             );
         }
 
-        // 2) Eğer pairingFor eşleşmesi yoksa: mevcut Meşhurlar mantığı
+        // 2) Eğer categoryUpsell eşleşmesi yoksa: mevcut Meşhurlar mantığı (fallback)
         if (pool.length === 0) {
             const cached = featuredProductsCache[storeId];
             pool = (cached && Array.isArray(cached.products)) ? cached.products.slice() : [];
@@ -2002,8 +2007,10 @@
             }
         }
 
+        // Sıralama: orderCount DESC (en çok siparişlenen üstte), stoplistdekiler yok, ilk 6
         const picks = pool
             .filter(p => String(p.id) !== String(currentProduct.id) && !isProductStoplisted(p))
+            .sort((a, b) => (Number(b.orderCount) || 0) - (Number(a.orderCount) || 0))
             .slice(0, 6);
 
         if (picks.length === 0) {
