@@ -1973,17 +1973,33 @@
         if (!wrap || !cardsEl || !currentProduct) return;
 
         const storeId = currentProduct.storeId;
-        const cached = featuredProductsCache[storeId];
-        let pool = (cached && Array.isArray(cached.products)) ? cached.products.slice() : [];
+        const currentCategory = (currentProduct.category || '').trim();
 
-        // Fallback: same store products excluding current
-        if (pool.length < 3) {
-            const extras = allProducts.filter(p =>
+        // 1) Öncelik: pairingFor ile eşleşen ürünler (kullanıcının el ile ayarladığı)
+        let pool = [];
+        if (currentCategory) {
+            pool = allProducts.filter(p =>
                 p.storeId === storeId &&
                 String(p.id) !== String(currentProduct.id) &&
-                !pool.some(x => String(x.id) === String(p.id))
+                Array.isArray(p.pairingFor) &&
+                p.pairingFor.includes(currentCategory)
             );
-            pool = pool.concat(extras);
+        }
+
+        // 2) Eğer pairingFor eşleşmesi yoksa: mevcut Meşhurlar mantığı
+        if (pool.length === 0) {
+            const cached = featuredProductsCache[storeId];
+            pool = (cached && Array.isArray(cached.products)) ? cached.products.slice() : [];
+
+            // Fallback: same store products excluding current
+            if (pool.length < 3) {
+                const extras = allProducts.filter(p =>
+                    p.storeId === storeId &&
+                    String(p.id) !== String(currentProduct.id) &&
+                    !pool.some(x => String(x.id) === String(p.id))
+                );
+                pool = pool.concat(extras);
+            }
         }
 
         const picks = pool

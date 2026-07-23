@@ -80,6 +80,11 @@ async function runMigrations() {
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS category_tr VARCHAR(255) DEFAULT '';
   `);
+  // ✅ Upsell — bu ürün hangi kategorilerde yan olarak önerilsin?
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS pairing_for JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
 
   // ✅ Kafe LAN sistemi tabloları (idempotent — mevcut deployment'a ekleme).
   // Sadece schema.sql güncellemek yetmez, çünkü prodüksiyon veritabanı zaten kurulu.

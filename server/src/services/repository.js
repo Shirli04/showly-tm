@@ -109,6 +109,7 @@ function normalizeProduct(row) {
     imagePublicId: row.image_public_id || '',
     variants: ensureArray(row.variants),
     views: row.views || 0,
+    pairingFor: ensureArray(row.pairing_for),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -538,13 +539,13 @@ async function upsertProduct(payload, id) {
       description, desc_ru, desc_en, desc_tr, material,
       category, category_ru, category_en, category_tr,
       price, discounted_price, is_on_sale,
-      image_url, image_public_id, variants, views
+      image_url, image_public_id, variants, views, pairing_for
     ) VALUES (
       COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
       $7, $8, $9, $10, $11,
       $12, $13, $14, $15,
       $16, $17, $18,
-      $19, $20, $21::jsonb, COALESCE($22, 0)
+      $19, $20, $21::jsonb, COALESCE($22, 0), $23::jsonb
     )
     ON CONFLICT (id) DO UPDATE SET
       store_id = EXCLUDED.store_id,
@@ -567,6 +568,7 @@ async function upsertProduct(payload, id) {
       image_url = EXCLUDED.image_url,
       image_public_id = EXCLUDED.image_public_id,
       variants = EXCLUDED.variants,
+      pairing_for = EXCLUDED.pairing_for,
       views = COALESCE($22, products.views),
       updated_at = NOW()
     RETURNING *
@@ -592,7 +594,8 @@ async function upsertProduct(payload, id) {
     source.imageUrl || '',
     source.imagePublicId || '',
     JSON.stringify(ensureArray(source.variants)),
-    typeof data.views === 'number' ? data.views : (current ? current.views : null)
+    typeof data.views === 'number' ? data.views : (current ? current.views : null),
+    JSON.stringify(ensureArray(source.pairingFor))
   ]);
 
   return normalizeProduct(result.rows[0]);
