@@ -77,6 +77,55 @@ async function runMigrations() {
     ALTER TABLE products
       ADD COLUMN IF NOT EXISTS order_count INTEGER NOT NULL DEFAULT 0;
   `);
+  // ✅ Şef maslahaty (chef's pick) — meşhurlarla çakışmayan alan
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS chef_pick BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+  // ✅ Ürün → kategori FK (opsiyonel, string category alanı ile paralel çalışır)
+  await pool.query(`
+    ALTER TABLE products
+      ADD COLUMN IF NOT EXISTS category_id UUID;
+  `);
+  // ✅ store_categories: mağaza başına yönetilen kategoriler (multi-lang isimlerle)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS store_categories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      store_id UUID NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+      name_tm VARCHAR(255) NOT NULL,
+      name_ru VARCHAR(255) NOT NULL DEFAULT '',
+      name_en VARCHAR(255) NOT NULL DEFAULT '',
+      name_tr VARCHAR(255) NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_store_categories_store_id ON store_categories(store_id);`);
+
+  // ✅ Backfill: mevcut ürünlerin string category alanlarından store_categories doldur (bir kereye mahsus)
+  await pool.query(`
+    INSERT INTO store_categories (store_id, name_tm, name_ru, name_en, name_tr, sort_order)
+    SELECT store_id, category, MAX(category_ru), MAX(category_en), MAX(category_tr),
+           ROW_NUMBER() OVER (PARTITION BY store_id ORDER BY category)
+    FROM products
+    WHERE COALESCE(TRIM(category), '') <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM store_categories sc
+        WHERE sc.store_id = products.store_id AND LOWER(sc.name_tm) = LOWER(products.category)
+      )
+    GROUP BY store_id, category
+  `);
+  // ✅ Ürünlerin category_id alanını uygun store_category ile eşleştir (boş olanları)
+  await pool.query(`
+    UPDATE products p
+    SET category_id = sc.id
+    FROM store_categories sc
+    WHERE p.category_id IS NULL
+      AND sc.store_id = p.store_id
+      AND LOWER(sc.name_tm) = LOWER(TRIM(p.category))
+      AND COALESCE(TRIM(p.category), '') <> ''
+  `);
   // ✅ Türkçe (TR) dil desteği için yeni sütunlar
   await pool.query(`
     ALTER TABLE products

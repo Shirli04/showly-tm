@@ -133,6 +133,22 @@ function normalizeProduct(row) {
     variants: ensureArray(row.variants),
     views: row.views || 0,
     orderCount: Number(row.order_count || 0),
+    chefPick: Boolean(row.chef_pick),
+    categoryId: row.category_id || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function normalizeStoreCategory(row) {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    nameTm: row.name_tm,
+    nameRu: row.name_ru || '',
+    nameEn: row.name_en || '',
+    nameTr: row.name_tr || '',
+    sortOrder: Number(row.sort_order || 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -565,13 +581,15 @@ async function upsertProduct(payload, id) {
       description, desc_ru, desc_en, desc_tr, material,
       category, category_ru, category_en, category_tr,
       price, discounted_price, is_on_sale,
-      image_url, image_public_id, variants, views
+      image_url, image_public_id, variants, views,
+      chef_pick, category_id
     ) VALUES (
       COALESCE($1, gen_random_uuid()), $2, $3, $4, $5, $6,
       $7, $8, $9, $10, $11,
       $12, $13, $14, $15,
       $16, $17, $18,
-      $19, $20, $21::jsonb, COALESCE($22, 0)
+      $19, $20, $21::jsonb, COALESCE($22, 0),
+      $23, $24
     )
     ON CONFLICT (id) DO UPDATE SET
       store_id = EXCLUDED.store_id,
@@ -595,6 +613,8 @@ async function upsertProduct(payload, id) {
       image_public_id = EXCLUDED.image_public_id,
       variants = EXCLUDED.variants,
       views = COALESCE($22, products.views),
+      chef_pick = EXCLUDED.chef_pick,
+      category_id = EXCLUDED.category_id,
       updated_at = NOW()
     RETURNING *
   `, [
@@ -619,7 +639,9 @@ async function upsertProduct(payload, id) {
     source.imageUrl || '',
     source.imagePublicId || '',
     JSON.stringify(ensureArray(source.variants)),
-    typeof data.views === 'number' ? data.views : (current ? current.views : null)
+    typeof data.views === 'number' ? data.views : (current ? current.views : null),
+    Boolean(source.chefPick),
+    source.categoryId || null
   ]);
 
   return normalizeProduct(result.rows[0]);
@@ -934,6 +956,114 @@ async function commitBatch(operations) {
   return true;
 }
 
+// ============================== STORE CATEGORIES ==============================
+
+async function listStoreCategories(storeId) {
+  const result = await query(
+    'SELECT * FROM store_categories WHERE store_id = $1 ORDER BY sort_order ASC, name_tm ASC',
+    [storeId]
+  );
+  return result.rows.map(normalizeStoreCategory);
+}
+
+async function createStoreCategory(storeId, data) {
+  if (!storeId) throw new HttpError(400, 'storeId is required');
+  const nameTm = String(data.nameTm || '').trim();
+  const nameRu = String(data.nameRu || '').trim();
+  if (!nameTm) throw new HttpError(400, 'nameTm is required');
+  if (!nameRu) throw new HttpError(400, 'nameRu is required');
+
+  const maxOrderRow = await query(
+    'SELECT COALESCE(MAX(sort_order), 0) AS max FROM store_categories WHERE store_id = $1',
+    [storeId]
+  );
+  const nextOrder = Number(maxOrderRow.rows[0]?.max || 0) + 1;
+
+  const result = await query(`
+    INSERT INTO store_categories (store_id, name_tm, name_ru, name_en, name_tr, sort_order)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `, [storeId, nameTm, nameRu, String(data.nameEn || '').trim(), String(data.nameTr || '').trim(), nextOrder]);
+  return normalizeStoreCategory(result.rows[0]);
+}
+
+async function updateStoreCategory(id, data) {
+  if (!id) throw new HttpError(400, 'category id is required');
+  const existing = await query('SELECT * FROM store_categories WHERE id = $1 LIMIT 1', [id]);
+  if (!existing.rows[0]) throw new HttpError(404, 'Category not found');
+  const current = existing.rows[0];
+
+  const nameTm = data.nameTm != null ? String(data.nameTm).trim() : current.name_tm;
+  const nameRu = data.nameRu != null ? String(data.nameRu).trim() : current.name_ru;
+  const nameEn = data.nameEn != null ? String(data.nameEn).trim() : current.name_en;
+  const nameTr = data.nameTr != null ? String(data.nameTr).trim() : current.name_tr;
+  const sortOrder = data.sortOrder != null ? Number(data.sortOrder) : Number(current.sort_order);
+
+  const result = await query(`
+    UPDATE store_categories
+    SET name_tm = $2, name_ru = $3, name_en = $4, name_tr = $5, sort_order = $6, updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `, [id, nameTm, nameRu, nameEn, nameTr, sortOrder]);
+
+  // Adı değiştiyse — bu kategoriye ait tüm ürünlerin string category alanlarını da güncelle
+  if (nameTm !== current.name_tm || nameRu !== current.name_ru || nameEn !== current.name_en || nameTr !== current.name_tr) {
+    await query(`
+      UPDATE products
+      SET category = $2, category_ru = $3, category_en = $4, category_tr = $5, updated_at = NOW()
+      WHERE category_id = $1
+    `, [id, nameTm, nameRu, nameEn, nameTr]);
+  }
+
+  return normalizeStoreCategory(result.rows[0]);
+}
+
+async function deleteStoreCategory(id) {
+  if (!id) throw new HttpError(400, 'category id is required');
+  const usage = await query('SELECT COUNT(*)::int AS n FROM products WHERE category_id = $1', [id]);
+  if (Number(usage.rows[0]?.n || 0) > 0) {
+    throw new HttpError(400, 'Bu kategoriýada haryt bar. Öçürmek üçin ilki harytlary başga kategoriýa geçiriň.');
+  }
+  await query('DELETE FROM store_categories WHERE id = $1', [id]);
+}
+
+async function reorderStoreCategories(storeId, orderedIds) {
+  if (!storeId) throw new HttpError(400, 'storeId is required');
+  const ids = Array.isArray(orderedIds) ? orderedIds : [];
+  await withTransaction(async (client) => {
+    for (let i = 0; i < ids.length; i++) {
+      await client.query(
+        'UPDATE store_categories SET sort_order = $2, updated_at = NOW() WHERE id = $1 AND store_id = $3',
+        [ids[i], i + 1, storeId]
+      );
+    }
+  });
+  return listStoreCategories(storeId);
+}
+
+async function mergeStoreCategories(sourceId, targetId) {
+  if (!sourceId || !targetId) throw new HttpError(400, 'sourceId and targetId are required');
+  if (sourceId === targetId) throw new HttpError(400, 'source and target must differ');
+
+  const rows = await query('SELECT * FROM store_categories WHERE id = ANY($1::uuid[])', [[sourceId, targetId]]);
+  if (rows.rows.length < 2) throw new HttpError(404, 'Category not found');
+  const target = rows.rows.find(r => r.id === targetId);
+  if (!target) throw new HttpError(404, 'Target category not found');
+
+  await withTransaction(async (client) => {
+    // Kaynak kategoriye ait ürünleri hedef kategoriye taşı
+    await client.query(`
+      UPDATE products
+      SET category_id = $2, category = $3, category_ru = $4, category_en = $5, category_tr = $6, updated_at = NOW()
+      WHERE category_id = $1
+    `, [sourceId, targetId, target.name_tm, target.name_ru, target.name_en, target.name_tr]);
+    // Kaynak kategoriyi sil
+    await client.query('DELETE FROM store_categories WHERE id = $1', [sourceId]);
+  });
+
+  return normalizeStoreCategory(target);
+}
+
 async function getCatalogBootstrap() {
   const [stores, parentCategories, subcategories, settings] = await Promise.all([
     listStores({}),
@@ -962,6 +1092,12 @@ module.exports = {
   removeUserFcmToken,
   listFcmTokensByStoreId,
   getCatalogBootstrap,
-  commitBatch
+  commitBatch,
+  listStoreCategories,
+  createStoreCategory,
+  updateStoreCategory,
+  deleteStoreCategory,
+  reorderStoreCategories,
+  mergeStoreCategories
 };
 

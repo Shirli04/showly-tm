@@ -24,7 +24,13 @@ const {
   saveUserFcmToken,
   removeUserFcmToken,
   getCatalogBootstrap,
-  commitBatch
+  commitBatch,
+  listStoreCategories,
+  createStoreCategory,
+  updateStoreCategory,
+  deleteStoreCategory,
+  reorderStoreCategories,
+  mergeStoreCategories
 } = require('./services/repository');
 const { sendNewOrderNotification } = require('./services/fcm');
 
@@ -735,6 +741,39 @@ app.patch('/api/stores/:id/category-order', requireAuth, asyncHandler(async (req
     [JSON.stringify(order), req.params.id]
   );
   res.json({ success: true, categoryOrder: order });
+}));
+
+// ===== Store Categories CRUD =====
+app.get('/api/stores/:storeId/categories', requireAuth, asyncHandler(async (req, res) => {
+  const rows = await listStoreCategories(req.params.storeId);
+  res.json(rows);
+}));
+
+app.post('/api/stores/:storeId/categories', requireAuth, asyncHandler(async (req, res) => {
+  const row = await createStoreCategory(req.params.storeId, req.body || {});
+  res.status(201).json(row);
+}));
+
+app.patch('/api/stores/:storeId/categories/order', requireAuth, asyncHandler(async (req, res) => {
+  const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : [];
+  const rows = await reorderStoreCategories(req.params.storeId, orderedIds);
+  res.json(rows);
+}));
+
+app.patch('/api/categories/:id', requireAuth, asyncHandler(async (req, res) => {
+  const row = await updateStoreCategory(req.params.id, req.body || {});
+  res.json(row);
+}));
+
+app.delete('/api/categories/:id', requireAuth, asyncHandler(async (req, res) => {
+  await deleteStoreCategory(req.params.id);
+  res.json({ success: true });
+}));
+
+app.post('/api/categories/:id/merge', requireAuth, asyncHandler(async (req, res) => {
+  const targetId = req.body?.targetId;
+  const merged = await mergeStoreCategories(req.params.id, targetId);
+  res.json(merged);
 }));
 
 // Kategori upsell map'ini doğrudan kaydeden endpoint (mobil için)
