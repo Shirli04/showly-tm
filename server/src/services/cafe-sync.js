@@ -56,12 +56,33 @@ router.get('/pull', requireCafeToken, asyncHandler(async (req, res) => {
       )
     : await query(`SELECT * FROM stores WHERE id = $1`, [storeId]);
 
+  // ONEMLI: soft-delete edilen (deleted_at IS NOT NULL) urunler kafeye
+  // GONDERILMEZ. Aksi halde kafede silinmis eski urunler birikir.
   const productsQ = sinceValid
     ? await query(
-        `SELECT * FROM products WHERE store_id = $1 AND updated_at > $2::timestamptz`,
+        `SELECT * FROM products
+          WHERE store_id = $1
+            AND deleted_at IS NULL
+            AND updated_at > $2::timestamptz`,
         [storeId, sinceValid]
       )
-    : await query(`SELECT * FROM products WHERE store_id = $1`, [storeId]);
+    : await query(
+        `SELECT * FROM products WHERE store_id = $1 AND deleted_at IS NULL`,
+        [storeId]
+      );
+
+  // Delta sync icin: since'den sonra soft-delete EDILEN urunlerin ID listesi.
+  // Kafe bunlari yerelde de silsin. Full sync'te bu liste gereksiz (cafe zaten
+  // gelen tam liste ile karsilastirip fazlalari siliyor).
+  const deletedProductIds = sinceValid
+    ? (await query(
+        `SELECT id FROM products
+          WHERE store_id = $1
+            AND deleted_at IS NOT NULL
+            AND deleted_at > $2::timestamptz`,
+        [storeId, sinceValid]
+      )).rows.map((r) => r.id)
+    : [];
 
   const parentCatsQ = await query(`SELECT * FROM parent_categories`);
   const subCatsQ = await query(`SELECT * FROM subcategories`);
@@ -92,6 +113,7 @@ router.get('/pull', requireCafeToken, asyncHandler(async (req, res) => {
     isFullSnapshot: !sinceValid,
     stores: storesQ.rows,
     products: productsQ.rows,
+    deletedProductIds,
     parentCategories: parentCatsQ.rows,
     subcategories: subCatsQ.rows,
     imagesManifest
